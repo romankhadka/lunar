@@ -38,7 +38,13 @@ final class ImageProviderTests: XCTestCase {
     }
 
     func testBundleFallbackWhenNoOverride() throws {
-        throw XCTSkip("Bundled PNGs are added in Task 15")
+        // With no override in place, ImageProvider must resolve a bundled PNG.
+        // Under `swift test`, `Bundle.module` is populated with the 8 phase PNGs.
+        let provider = ImageProvider(supportDirectory: tempDir,
+                                     resourceBundle: .module)
+        let img = try provider.baseImage(for: .full)
+        XCTAssertEqual(img.width, 4096)
+        XCTAssertEqual(img.height, 4096)
     }
 
     func testOverrideTakesPrecedence() throws {

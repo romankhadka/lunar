@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                                  withIntermediateDirectories: true)
 
         let images = ImageProvider(supportDirectory: appSupport,
-                                    resourceBundle: .module)
+                                    resourceBundle: .main)
         let fileStore = WallpaperFileStore(
             directory: appSupport.appendingPathComponent("current",
                                                           isDirectory: true))
@@ -68,19 +68,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         observers.append(nc.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main) { [weak self] _ in
-                try? self?.coordinator.updateWallpaper()
+                Task { @MainActor in try? self?.coordinator.updateWallpaper() }
             })
 
         let anc = NotificationCenter.default
         observers.append(anc.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main) { [weak self] _ in
-                try? self?.coordinator.updateWallpaper(force: true)
+                Task { @MainActor in try? self?.coordinator.updateWallpaper(force: true) }
             })
 
         appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) {
             [weak self] _, _ in
-            DispatchQueue.main.async { try? self?.coordinator.reapplyToday() }
+            Task { @MainActor in try? self?.coordinator.reapplyToday() }
         }
     }
 
@@ -93,8 +93,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if fire <= now { fire = cal.date(byAdding: .day, value: 1, to: fire)! }
         dailyTimer?.invalidate()
         dailyTimer = Timer(fire: fire, interval: 0, repeats: false) { [weak self] _ in
-            try? self?.coordinator.updateWallpaper()
-            self?.scheduleDailyTimer()
+            Task { @MainActor in
+                try? self?.coordinator.updateWallpaper()
+                self?.scheduleDailyTimer()
+            }
         }
         RunLoop.main.add(dailyTimer!, forMode: .common)
     }

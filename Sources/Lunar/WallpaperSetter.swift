@@ -7,6 +7,7 @@ import AppKit
 protocol WallpaperApplying {
     func apply(image: CGImage, for date: Date) throws
     func reapplyToday() throws
+    func fileExists(for date: Date) -> Bool
 }
 
 /// Pure file-layer: writes dated PNGs, prunes old ones.
@@ -72,15 +73,26 @@ struct WallpaperSetter: WallpaperApplying {
         try applyURLToAllScreens(url)
     }
 
+    func fileExists(for date: Date) -> Bool {
+        FileManager.default.fileExists(atPath: store.url(for: date).path)
+    }
+
     private func applyURLToAllScreens(_ url: URL) throws {
+        var firstError: Error?
         for screen in NSScreen.screens {
-            try NSWorkspace.shared.setDesktopImageURL(
-                url,
-                for: screen,
-                options: [
-                    .imageScaling: NSImageScaling.scaleProportionallyUpOrDown.rawValue,
-                    .allowClipping: true
-                ])
+            do {
+                try NSWorkspace.shared.setDesktopImageURL(
+                    url,
+                    for: screen,
+                    options: [
+                        .imageScaling: NSImageScaling.scaleProportionallyUpOrDown.rawValue,
+                        .allowClipping: true
+                    ])
+            } catch {
+                Log.wallpaper.error("setDesktopImageURL failed for screen \(screen.localizedName, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                firstError = firstError ?? error
+            }
         }
+        if let firstError { throw firstError }
     }
 }

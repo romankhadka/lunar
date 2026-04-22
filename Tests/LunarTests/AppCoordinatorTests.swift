@@ -27,8 +27,13 @@ final class AppCoordinatorTests: XCTestCase {
     final class FakeSetter: WallpaperApplying {
         var applied: [Date] = []
         var reapplied = 0
-        func apply(image: CGImage, for date: Date) throws { applied.append(date) }
+        var todayFileExists = false   // default: no file yet
+        func apply(image: CGImage, for date: Date) throws {
+            applied.append(date)
+            todayFileExists = true   // apply "creates" the file
+        }
         func reapplyToday() throws { reapplied += 1 }
+        func fileExists(for date: Date) -> Bool { todayFileExists }
     }
 
     @MainActor

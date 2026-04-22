@@ -38,7 +38,9 @@ final class AppCoordinator: ObservableObject {
         let phase = PhaseCalculator.phase(for: now)
         let key = Self.key(for: now, phase: phase.phaseName)
 
-        if !force, defaults.string(forKey: lastAppliedKeyDefault) == key {
+        if !force,
+           defaults.string(forKey: lastAppliedKeyDefault) == key,
+           setter.fileExists(for: now) {
             currentPhase = phase
             nextPhase = Self.predictNext(from: now, currentAge: phase.age)
             return

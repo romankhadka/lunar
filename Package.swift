@@ -18,7 +18,10 @@ let package = Package(
             name: "LunarTests",
             dependencies: ["Lunar"],
             path: "Tests/LunarTests",
-            resources: [.process("Resources")]
+            resources: [
+                .process("Resources/placeholder.txt"),
+                .copy("Resources/phases")
+            ]
         )
     ]
 )

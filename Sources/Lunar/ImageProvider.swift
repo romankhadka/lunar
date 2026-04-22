@@ -29,13 +29,25 @@ struct ImageProvider: ImageProviding {
             overrideDirectory.appendingPathComponent("\(phase.rawValue).png")) {
             return fromOverride
         }
-        guard let url = resourceBundle.url(forResource: phase.rawValue,
-                                           withExtension: "png",
-                                           subdirectory: "phases"),
-              let img = loadImage(at: url) else {
-            throw Error.bundledImageMissing(phase)
+        // Try the bundle's direct resource-dir layout first (this is how the
+        // assembled .app ships — PNGs live at Contents/Resources/phases/*.png).
+        if let resourceURL = resourceBundle.resourceURL {
+            let direct = resourceURL
+                .appendingPathComponent("phases", isDirectory: true)
+                .appendingPathComponent("\(phase.rawValue).png")
+            if let img = loadImage(at: direct) {
+                return img
+            }
         }
-        return img
+        // Fall back to SwiftPM's resource-bundle layout (used during `swift test`).
+        if let url = resourceBundle.url(forResource: phase.rawValue,
+                                         withExtension: "png",
+                                         subdirectory: "phases"),
+           let img = loadImage(at: url) {
+            return img
+        }
+        Log.image.error("No bundled image found for \(phase.rawValue, privacy: .public)")
+        throw Error.bundledImageMissing(phase)
     }
 
     func openOverrideFolderInFinder() {

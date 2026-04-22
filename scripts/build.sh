@@ -20,11 +20,8 @@ cp Sources/Lunar/Info.plist             "$APP_ROOT/Contents/Info.plist"
 cp Sources/Lunar/Resources/phases/*.png "$APP_ROOT/Contents/Resources/phases/"
 printf 'APPL????' > "$APP_ROOT/Contents/PkgInfo"
 
-# SwiftPM emits a resource bundle next to the binary; copy that too so
-# Bundle.module resolves at runtime.
-if [ -d "$BIN_PATH/Lunar_Lunar.bundle" ]; then
-  cp -R "$BIN_PATH/Lunar_Lunar.bundle" "$APP_ROOT/Contents/Resources/"
-fi
+# (Lunar_Lunar.bundle copy removed — production code reads PNGs directly
+# from Contents/Resources/phases/ via Bundle.main.)
 
 echo "--> codesign (ad-hoc)"
 codesign --force --deep --sign - "$APP_ROOT"
