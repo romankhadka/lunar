@@ -15,7 +15,8 @@ let package = Package(
         .testTarget(
             name: "LunarTests",
             dependencies: ["Lunar"],
-            path: "Tests/LunarTests"
+            path: "Tests/LunarTests",
+            resources: [.process("Resources")]
         )
     ]
 )
