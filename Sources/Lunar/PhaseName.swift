@@ -1,5 +1,7 @@
 import Foundation
 
+/// Canonical names for the 8 lunar phases. Raw values double as the filename
+/// stems consumed by `ImageProvider` (e.g. `waxing_crescent.png`).
 enum PhaseName: String, CaseIterable {
     case new              = "new"
     case waxingCrescent   = "waxing_crescent"

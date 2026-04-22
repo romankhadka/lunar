@@ -18,9 +18,13 @@ final class PhaseNameTests: XCTestCase {
     }
 
     func testDisplayNameIsHumanReadable() {
-        XCTAssertEqual(PhaseName.waxingCrescent.displayName, "Waxing Crescent")
-        XCTAssertEqual(PhaseName.full.displayName, "Full Moon")
-        XCTAssertEqual(PhaseName.new.displayName, "New Moon")
-        XCTAssertEqual(PhaseName.lastQuarter.displayName, "Last Quarter")
+        XCTAssertEqual(PhaseName.new.displayName,             "New Moon")
+        XCTAssertEqual(PhaseName.waxingCrescent.displayName,  "Waxing Crescent")
+        XCTAssertEqual(PhaseName.firstQuarter.displayName,    "First Quarter")
+        XCTAssertEqual(PhaseName.waxingGibbous.displayName,   "Waxing Gibbous")
+        XCTAssertEqual(PhaseName.full.displayName,            "Full Moon")
+        XCTAssertEqual(PhaseName.waningGibbous.displayName,   "Waning Gibbous")
+        XCTAssertEqual(PhaseName.lastQuarter.displayName,     "Last Quarter")
+        XCTAssertEqual(PhaseName.waningCrescent.displayName,  "Waning Crescent")
     }
 }
