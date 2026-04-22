@@ -131,4 +131,44 @@ final class PhaseCalculatorTests: XCTestCase {
             d += 0.5
         }
     }
+
+    // MARK: Public API
+
+    func testPhaseForKnownDates() {
+        struct Case { let y, m, d: Int; let name: PhaseName; let minIllum, maxIllum: Double }
+        let cases: [Case] = [
+            // NASA GSFC canonical phase dates (UTC). Times chosen to sit well
+            // inside the relevant bucket.
+            .init(y: 2024, m: 1,  d: 11, name: .new,          minIllum: 0.00, maxIllum: 0.05),
+            .init(y: 2024, m: 1,  d: 18, name: .firstQuarter, minIllum: 0.45, maxIllum: 0.55),
+            .init(y: 2024, m: 1,  d: 25, name: .full,         minIllum: 0.95, maxIllum: 1.00),
+            .init(y: 2024, m: 2,  d: 2,  name: .lastQuarter,  minIllum: 0.45, maxIllum: 0.55),
+            .init(y: 2026, m: 4,  d: 17, name: .new,          minIllum: 0.00, maxIllum: 0.05),
+            .init(y: 2026, m: 4,  d: 24, name: .firstQuarter, minIllum: 0.40, maxIllum: 0.60),
+            .init(y: 2026, m: 5,  d: 1,  name: .full,         minIllum: 0.95, maxIllum: 1.00),
+            .init(y: 2026, m: 5,  d: 9,  name: .lastQuarter,  minIllum: 0.40, maxIllum: 0.60),
+        ]
+        for c in cases {
+            let d = utcDate(c.y, c.m, c.d, 12)
+            let phase = PhaseCalculator.phase(for: d)
+            XCTAssertEqual(phase.phaseName, c.name,
+                           "Wrong phase for \(c.y)-\(c.m)-\(c.d): got \(phase.phaseName)")
+            XCTAssertGreaterThanOrEqual(phase.illumination, c.minIllum,
+                           "Illum too low for \(c.y)-\(c.m)-\(c.d)")
+            XCTAssertLessThanOrEqual(phase.illumination, c.maxIllum,
+                           "Illum too high for \(c.y)-\(c.m)-\(c.d)")
+        }
+    }
+
+    func testMoonPhaseCarriesInputDate() {
+        let d = utcDate(2026, 4, 21, 12)
+        let p = PhaseCalculator.phase(for: d)
+        XCTAssertEqual(p.date, d)
+    }
+
+    func testAgeIsInValidRange() {
+        let p = PhaseCalculator.phase(for: Date())
+        XCTAssertGreaterThanOrEqual(p.age, 0)
+        XCTAssertLessThan(p.age, PhaseCalculator.synodicPeriod)
+    }
 }

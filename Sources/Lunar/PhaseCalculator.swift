@@ -1,5 +1,12 @@
 import Foundation
 
+struct MoonPhase: Equatable {
+    let date: Date
+    let age: Double
+    let illumination: Double
+    let phaseName: PhaseName
+}
+
 enum PhaseCalculator {
 
     /// Converts a `Date` to a Julian Day number.
@@ -76,5 +83,16 @@ enum PhaseCalculator {
         case 7: return .waningCrescent
         default: return .new   // unreachable
         }
+    }
+
+    /// Full phase information for a given instant.
+    static func phase(for date: Date) -> MoonPhase {
+        let age = synodicAge(for: date)
+        return MoonPhase(
+            date: date,
+            age: age,
+            illumination: illumination(for: date),
+            phaseName: phaseName(forAge: age)
+        )
     }
 }
