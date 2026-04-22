@@ -83,4 +83,52 @@ final class PhaseCalculatorTests: XCTestCase {
         XCTAssertLessThan(PhaseCalculator.illumination(for: d1),
                           PhaseCalculator.illumination(for: d2))
     }
+
+    // MARK: Bucketing
+
+    func testBucketNewMoon() {
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 0.00), .new)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 1.84), .new)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 28.00), .new)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 29.50), .new)
+    }
+
+    func testBucketFirstQuarter() {
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 6.00), .firstQuarter)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 7.38), .firstQuarter)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 9.00), .firstQuarter)
+    }
+
+    func testBucketFullMoon() {
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 13.50), .full)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 14.77), .full)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 16.00), .full)
+    }
+
+    func testBucketLastQuarter() {
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 21.00), .lastQuarter)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 22.15), .lastQuarter)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 23.50), .lastQuarter)
+    }
+
+    func testBucketWaxingGibbous() {
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 10.00), .waxingGibbous)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 12.50), .waxingGibbous)
+    }
+
+    func testBucketWaningCrescent() {
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 25.00), .waningCrescent)
+        XCTAssertEqual(PhaseCalculator.phaseName(forAge: 27.00), .waningCrescent)
+    }
+
+    func testBucketBoundariesExhaustive() {
+        // Walk the cycle at 0.5-day increments; every result must be a PhaseName.
+        var d = 0.0
+        while d < 29.53 {
+            let p = PhaseCalculator.phaseName(forAge: d)
+            XCTAssertTrue(PhaseName.allCases.contains(p),
+                          "Age \(d) produced unknown phase")
+            d += 0.5
+        }
+    }
 }

@@ -54,4 +54,27 @@ enum PhaseCalculator {
         let phaseRad = phaseDeg * .pi / 180.0
         return (1.0 + cos(phaseRad)) / 2.0
     }
+
+    /// Buckets a synodic-age value into one of 8 phase names.
+    /// Buckets are 29.53/8 ≈ 3.691 days wide and centered on the four
+    /// astronomical events (new at 0, first quarter at 7.38, full at 14.77,
+    /// last quarter at 22.15). "New" wraps across the cycle boundary.
+    static func phaseName(forAge age: Double) -> PhaseName {
+        let bucket = synodicPeriod / 8.0       // ≈ 3.691
+        let shifted = (age + bucket / 2)
+            .truncatingRemainder(dividingBy: synodicPeriod)
+        let normalized = shifted < 0 ? shifted + synodicPeriod : shifted
+        let index = Int(normalized / bucket) % 8
+        switch index {
+        case 0: return .new
+        case 1: return .waxingCrescent
+        case 2: return .firstQuarter
+        case 3: return .waxingGibbous
+        case 4: return .full
+        case 5: return .waningGibbous
+        case 6: return .lastQuarter
+        case 7: return .waningCrescent
+        default: return .new   // unreachable
+        }
+    }
 }
