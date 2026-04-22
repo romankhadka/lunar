@@ -10,7 +10,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Lunar",
-            path: "Sources/Lunar"
+            path: "Sources/Lunar",
+            exclude: ["Info.plist"],
+            resources: [.copy("Resources/phases")]
         ),
         .testTarget(
             name: "LunarTests",
