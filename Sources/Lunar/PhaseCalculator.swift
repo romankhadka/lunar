@@ -24,4 +24,20 @@ enum PhaseCalculator {
              + floor(30.6001 * (M + 1))
              + D + B - 1524.5
     }
+
+    /// Synodic period (mean interval between new moons), in days.
+    static let synodicPeriod: Double = 29.530588853
+
+    /// Reference Julian Day of a known new moon:
+    /// 2000-01-06 18:14 UTC (first new moon after J2000 epoch).
+    static let referenceNewMoonJD: Double = 2451550.09766
+
+    /// Days since the last new moon at the given instant.
+    /// Result is in the half-open range [0, 29.530588853).
+    static func synodicAge(for date: Date) -> Double {
+        let jd = julianDay(for: date)
+        let raw = (jd - referenceNewMoonJD).truncatingRemainder(
+            dividingBy: synodicPeriod)
+        return raw < 0 ? raw + synodicPeriod : raw
+    }
 }

@@ -29,4 +29,29 @@ final class PhaseCalculatorTests: XCTestCase {
         XCTAssertEqual(PhaseCalculator.julianDay(for: j2000),
                        2451545.0, accuracy: 0.001)
     }
+
+    // MARK: Synodic age
+
+    func testSynodicAgeAtKnownNewMoon() {
+        // 2024-01-11 11:57 UTC — documented new moon (NASA GSFC eclipse catalog)
+        let d = utcDate(2024, 1, 11, 12)
+        let age = PhaseCalculator.synodicAge(for: d)
+        // At noon UTC on 2024-01-11, we're ~0.0 days past new moon (±0.05).
+        XCTAssertLessThan(age, 0.2)
+    }
+
+    func testSynodicAgeAtKnownFullMoon() {
+        // 2024-01-25 17:54 UTC — documented full moon
+        let d = utcDate(2024, 1, 25, 18)
+        let age = PhaseCalculator.synodicAge(for: d)
+        // Full moon is age ≈ 14.77 days.
+        XCTAssertEqual(age, 14.77, accuracy: 0.3)
+    }
+
+    func testSynodicAgeWrapsWithinRange() {
+        let d = utcDate(2026, 6, 15, 12)
+        let age = PhaseCalculator.synodicAge(for: d)
+        XCTAssertGreaterThanOrEqual(age, 0)
+        XCTAssertLessThan(age, 29.530588853)
+    }
 }
