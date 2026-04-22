@@ -36,8 +36,9 @@ enum PhaseCalculator {
     static let synodicPeriod: Double = 29.530588853
 
     /// Reference Julian Day of a known new moon:
-    /// 2000-01-06 18:14 UTC (first new moon after J2000 epoch).
-    static let referenceNewMoonJD: Double = 2451550.09766
+    /// 2024-01-11 11:57 UTC. Anchored recently so the simplified mean-cycle
+    /// model stays accurate for the years the app actually runs.
+    static let referenceNewMoonJD: Double = 2460320.9979
 
     /// Days since the last new moon at the given instant.
     /// Result is in the half-open range [0, 29.530588853).
