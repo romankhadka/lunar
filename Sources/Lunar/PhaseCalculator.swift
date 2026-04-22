@@ -40,4 +40,18 @@ enum PhaseCalculator {
             dividingBy: synodicPeriod)
         return raw < 0 ? raw + synodicPeriod : raw
     }
+
+    /// Fraction of the Moon's disk illuminated, in [0, 1].
+    /// Uses a simplified Meeus ch. 48 formulation via the Moon's mean
+    /// elongation from the Sun; sufficient for phase bucketing and
+    /// percentage display (accurate to a few tenths of a percent).
+    static func illumination(for date: Date) -> Double {
+        let age = synodicAge(for: date)
+        // Phase angle i varies ~linearly with synodic age from 180° at
+        // new to 0° at full and back to 180°. i = |180° − (age/P)·360°|.
+        let fraction = age / synodicPeriod          // 0 … 1
+        let phaseDeg = abs(180.0 - fraction * 360.0) // 180 at new, 0 at full
+        let phaseRad = phaseDeg * .pi / 180.0
+        return (1.0 + cos(phaseRad)) / 2.0
+    }
 }

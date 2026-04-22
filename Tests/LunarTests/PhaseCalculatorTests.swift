@@ -54,4 +54,33 @@ final class PhaseCalculatorTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(age, 0)
         XCTAssertLessThan(age, 29.530588853)
     }
+
+    // MARK: Illumination
+
+    func testIlluminationNewMoon() {
+        let d = utcDate(2024, 1, 11, 12)
+        let illum = PhaseCalculator.illumination(for: d)
+        XCTAssertLessThan(illum, 0.05)
+    }
+
+    func testIlluminationFullMoon() {
+        let d = utcDate(2024, 1, 25, 18)
+        let illum = PhaseCalculator.illumination(for: d)
+        XCTAssertGreaterThan(illum, 0.95)
+    }
+
+    func testIlluminationFirstQuarter() {
+        // 2024-01-18 03:52 UTC — documented first quarter
+        let d = utcDate(2024, 1, 18, 4)
+        let illum = PhaseCalculator.illumination(for: d)
+        XCTAssertEqual(illum, 0.50, accuracy: 0.05)
+    }
+
+    func testIlluminationMonotonicAroundFull() {
+        // Before full, illumination should be rising.
+        let d1 = utcDate(2024, 1, 24, 18)
+        let d2 = utcDate(2024, 1, 25, 18)
+        XCTAssertLessThan(PhaseCalculator.illumination(for: d1),
+                          PhaseCalculator.illumination(for: d2))
+    }
 }
