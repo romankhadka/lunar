@@ -1,0 +1,10 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+Package.resolved
+xcuserdata/
+*.xcodeproj/
+/build/
+/Lunar.app/
+.lunar-smoke-tmp/
