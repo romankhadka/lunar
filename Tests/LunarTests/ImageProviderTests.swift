@@ -38,13 +38,12 @@ final class ImageProviderTests: XCTestCase {
     }
 
     func testBundleFallbackWhenNoOverride() throws {
-        // With no override in place, ImageProvider must resolve a bundled PNG.
-        // Under `swift test`, `Bundle.module` is populated with the 8 phase PNGs.
         let provider = ImageProvider(supportDirectory: tempDir,
                                      resourceBundle: .module)
         let img = try provider.baseImage(for: .full)
-        XCTAssertEqual(img.width, 4096)
-        XCTAssertEqual(img.height, 4096)
+        // NASA imagery, bundled as defaults. 3240×3240.
+        XCTAssertEqual(img.width, 3240)
+        XCTAssertEqual(img.height, 3240)
     }
 
     func testOverrideTakesPrecedence() throws {

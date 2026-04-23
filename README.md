@@ -18,10 +18,10 @@ Open the menu-bar moon icon and toggle **Launch at Login**.
 
 ## Custom phase images
 
-Lunar ships with programmatically-generated placeholder images. To use your own:
+Lunar ships with public-domain NASA moon imagery (3240×3240 PNGs). To use your own instead:
 
 1. Menu → **Open Phases Folder…**
-2. Drop in 4096×4096 PNG files named:
+2. Drop in square PNG files named:
    - `new.png`
    - `waxing_crescent.png`
    - `first_quarter.png`

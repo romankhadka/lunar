@@ -23,7 +23,7 @@ The app is a personal utility, distributed as source for local build. No network
 | 6 | Light/dark mode | Same wallpaper in both modes |
 | 7 | Image source | Bundled defaults + override folder |
 | 8 | Hemisphere | Northern Hemisphere only (hard-coded) |
-| 9 | Image spec | 4096×4096 square PNGs, black background |
+| 9 | Image spec | NASA imagery, square RGB PNGs (3240×3240 bundled), black background |
 | 10 | Architecture | Native Swift + SwiftUI menu-bar app |
 | 11 | Name | Lunar |
 
@@ -109,7 +109,7 @@ Implementation note: bucket by `(age + halfBucket) mod 29.53` so the New-moon wr
 **Filename convention (fixed, snake_case):**
 `new.png`, `waxing_crescent.png`, `first_quarter.png`, `waxing_gibbous.png`, `full.png`, `waning_gibbous.png`, `last_quarter.png`, `waning_crescent.png`
 
-**Image spec (documented in README):** 4096×4096 PNG, RGB, moon centered on near-black (`#000000`–`#0A0A0A`) background. The app does not validate dimensions — it scales at composite time. Northern Hemisphere orientation (waxing on the right, waning on the left).
+**Image spec:** square RGB PNG (bundled defaults are 3240×3240 NASA imagery), moon centered on near-black (`#000000`–`#0A0A0A`) background. The app does not validate dimensions — it scales at composite time. Northern Hemisphere orientation (waxing on the right, waning on the left).
 
 **First-run setup:** On first launch, the app creates `~/Library/Application Support/Lunar/phases/` if absent. It does **not** auto-copy bundled images into it — the folder stays empty until the user drops overrides in. Empty folder unambiguously means "use bundled."
 
