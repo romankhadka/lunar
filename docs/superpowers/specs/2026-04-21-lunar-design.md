@@ -133,7 +133,7 @@ struct ImageProvider {
 
 **Composition steps:**
 1. Create a `CGContext` at target canvas size, fill with pure black (`#000000`).
-2. Scale-and-center the 4096×4096 base using aspect-fit. On landscape canvases (the common case: MacBook, 5K, ultrawide) the square source pillarboxes with black bars on the left and right; on portrait canvases it would letterbox on top and bottom. Either way, the seam is invisible because base images are black-backgrounded and the canvas fill is black.
+2. Scale-and-center the square base image (bundled defaults are 3240×3240 NASA imagery; user overrides any square resolution) using aspect-fit. On landscape canvases (the common case: MacBook, 5K, ultrawide) the square source pillarboxes with black bars on the left and right; on portrait canvases it would letterbox on top and bottom. Either way, the seam is invisible because base images are black-backgrounded and the canvas fill is black.
 3. Draw overlay text in the bottom-right corner with a margin equal to ~1.25% of canvas width (≈ 64 px on a 5120×2880 canvas).
 4. Flatten to `CGImage`.
 
