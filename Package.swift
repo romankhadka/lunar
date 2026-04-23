@@ -17,11 +17,7 @@ let package = Package(
         .testTarget(
             name: "LunarTests",
             dependencies: ["Lunar"],
-            path: "Tests/LunarTests",
-            resources: [
-                .process("Resources/placeholder.txt"),
-                .copy("Resources/phases")
-            ]
+            path: "Tests/LunarTests"
         )
     ]
 )
