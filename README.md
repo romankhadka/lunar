@@ -1,5 +1,7 @@
 # Lunar
 
+[![Test](https://github.com/romankhadka/lunar/actions/workflows/test.yml/badge.svg)](https://github.com/romankhadka/lunar/actions/workflows/test.yml)
+
 A tiny macOS menu-bar app that paints your desktop wallpaper with today's moon phase — updated silently every day.
 
 Ships with 8 public-domain NASA moon photographs (one per phase), cycling automatically as the moon moves through its synodic cycle. A small overlay in the bottom-right of the wallpaper shows the current phase, illumination percentage, and date.
