@@ -168,6 +168,8 @@ struct Compositor {
 
 **Why dated filenames:** macOS has a known bug (`sindresorhus/macos-wallpaper` issue #44, reproduced on Sonoma 14.2.1) where calling `setDesktopImageURL` with the same URL whose file *contents* have changed fails to refresh the desktop. Using a fresh URL each day sidesteps it.
 
+**WallpaperAgent cache workaround (v1.0.1):** On macOS Sonoma and later, `setDesktopImageURL` sometimes updates the preference without triggering a redraw of the visible desktop — especially when an existing dated file's content changes mid-day. After each `apply()`, `WallpaperSetter` sends SIGTERM to the `WallpaperAgent` daemon (via `killall WallpaperAgent`); launchd restarts it and the new preference is honored. The daemon restart produces a brief wallpaper flicker but is invisible during normal daily operation (once per day). `reapplyToday()` does not kick the daemon because appearance-change triggers already force a redraw.
+
 **Apply logic:**
 
 ```swift

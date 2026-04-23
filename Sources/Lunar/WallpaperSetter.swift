@@ -65,6 +65,7 @@ struct WallpaperSetter: WallpaperApplying {
     func apply(image: CGImage, for date: Date) throws {
         let url = try store.write(image: image, for: date)
         try applyURLToAllScreens(url)
+        kickWallpaperAgent()
     }
 
     func reapplyToday() throws {
@@ -75,6 +76,25 @@ struct WallpaperSetter: WallpaperApplying {
 
     func fileExists(for date: Date) -> Bool {
         FileManager.default.fileExists(atPath: store.url(for: date).path)
+    }
+
+    /// Nudges macOS's wallpaper daemon to drop its cache and redraw.
+    /// Workaround for a Sonoma+ bug where `setDesktopImageURL` updates the
+    /// preference but the visible desktop keeps showing the previously-rendered
+    /// wallpaper, even with a fresh file URL per day. Observed when override
+    /// PNGs are dropped mid-day and a force-refresh is triggered.
+    private func kickWallpaperAgent() {
+        let proc = Process()
+        proc.launchPath = "/usr/bin/killall"
+        proc.arguments = ["WallpaperAgent"]
+        proc.standardError = Pipe()
+        proc.standardOutput = Pipe()
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+        } catch {
+            Log.wallpaper.error("killall WallpaperAgent failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func applyURLToAllScreens(_ url: URL) throws {
