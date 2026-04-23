@@ -20,6 +20,14 @@ Ships with 8 public-domain NASA moon photographs (one per phase), cycling automa
 
 ## Install
 
+### Option A — Download the DMG (easiest)
+
+1. Grab the latest DMG from the [releases page](https://github.com/romankhadka/lunar/releases).
+2. Open the DMG and drag **Lunar.app** into **Applications**.
+3. Launch Lunar from Applications. On first launch macOS will warn that the app is from an unidentified developer — the DMG is ad-hoc signed, not notarized. Right-click **Lunar.app → Open** once to bypass the warning; subsequent launches work normally.
+
+### Option B — Build from source
+
 ```bash
 git clone https://github.com/romankhadka/lunar.git
 cd lunar
@@ -27,7 +35,9 @@ cd lunar
 open ~/Applications/Lunar.app
 ```
 
-Click the moon icon in the menu bar, toggle **Launch at Login**, and you're done.
+---
+
+After installing, click the moon icon in the menu bar and toggle **Launch at Login** if you want Lunar to start automatically.
 
 ## Custom phase images
 
