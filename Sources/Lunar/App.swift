@@ -68,19 +68,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         observers.append(nc.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in try? self?.coordinator.updateWallpaper() }
+                guard let self else { return }
+                Task { @MainActor in try? self.coordinator.updateWallpaper() }
             })
 
         let anc = NotificationCenter.default
         observers.append(anc.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in try? self?.coordinator.updateWallpaper(force: true) }
+                guard let self else { return }
+                Task { @MainActor in try? self.coordinator.updateWallpaper(force: true) }
             })
 
         appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) {
             [weak self] _, _ in
-            Task { @MainActor in try? self?.coordinator.reapplyToday() }
+            guard let self else { return }
+            Task { @MainActor in try? self.coordinator.reapplyToday() }
         }
     }
 
@@ -93,9 +96,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         if fire <= now { fire = cal.date(byAdding: .day, value: 1, to: fire)! }
         dailyTimer?.invalidate()
         dailyTimer = Timer(fire: fire, interval: 0, repeats: false) { [weak self] _ in
+            guard let self else { return }
             Task { @MainActor in
-                try? self?.coordinator.updateWallpaper()
-                self?.scheduleDailyTimer()
+                try? self.coordinator.updateWallpaper()
+                self.scheduleDailyTimer()
             }
         }
         RunLoop.main.add(dailyTimer!, forMode: .common)
