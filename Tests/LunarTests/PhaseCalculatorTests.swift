@@ -41,13 +41,10 @@ final class PhaseCalculatorTests: XCTestCase {
     }
 
     func testSynodicAgeAtKnownFullMoon() {
-        // 2024-01-25 17:54 UTC — documented full moon
+        // 2024-01-25 17:54 UTC — documented full moon (age 14.77 days)
         let d = utcDate(2024, 1, 25, 18)
         let age = PhaseCalculator.synodicAge(for: d)
-        // Full moon is age ≈ 14.77 days.
-        // Mean-cycle model is accurate to ~±1 day at full moon vs the true
-        // (eccentricity-affected) NASA event time.
-        XCTAssertEqual(age, 14.77, accuracy: 1.0)
+        XCTAssertEqual(age, 14.77, accuracy: 0.15)
     }
 
     func testSynodicAgeWrapsWithinRange() {
@@ -75,9 +72,8 @@ final class PhaseCalculatorTests: XCTestCase {
         // 2024-01-18 03:52 UTC — documented first quarter
         let d = utcDate(2024, 1, 18, 4)
         let illum = PhaseCalculator.illumination(for: d)
-        // Simplified mean-cycle model can be ~10% off at the quarters when
-        // a particular lunation runs short or long vs the synodic mean.
-        XCTAssertEqual(illum, 0.50, accuracy: 0.10)
+        // Full Meeus: accuracy target <0.5% near quarters.
+        XCTAssertEqual(illum, 0.50, accuracy: 0.02)
     }
 
     func testIlluminationMonotonicAroundFull() {
@@ -174,5 +170,42 @@ final class PhaseCalculatorTests: XCTestCase {
         let p = PhaseCalculator.phase(for: Date())
         XCTAssertGreaterThanOrEqual(p.age, 0)
         XCTAssertLessThan(p.age, PhaseCalculator.synodicPeriod)
+    }
+
+    // MARK: - USNO cross-check (±0.5% illumination; values rounded to integer percent)
+
+    func testIlluminationMatchesUSNO() {
+        // (date at 12:00 UT, USNO fracillum percent). Tolerance ±0.01 to account for
+        // USNO's integer rounding and our algorithm's <0.1% error.
+        let cases: [(Int, Int, Int, Int)] = [
+            // year, month, day, percent
+            (2024, 1, 25, 100),
+            (2024, 3, 1, 71),
+            (2024, 4, 8, 0),
+            (2024, 6, 15, 62),
+            (2024, 7, 4, 3),
+            (2024, 9, 22, 74),
+            (2024, 11, 15, 100),
+            (2024, 12, 15, 100),
+            (2025, 1, 15, 97),
+            (2025, 3, 14, 100),
+            (2025, 4, 21, 46),
+            (2025, 6, 11, 100),
+            (2025, 9, 7, 100),
+            (2025, 12, 4, 99),
+            (2026, 1, 10, 52),
+            (2026, 2, 20, 10),
+            (2026, 4, 21, 22),
+            (2026, 6, 29, 100),
+            (2026, 8, 28, 100),
+            (2026, 10, 15, 22),
+        ]
+        for (y, m, d, p) in cases {
+            let date = utcDate(y, m, d, 12)  // 12:00 UT (USNO fracillum is reported at noon UT)
+            let illum = PhaseCalculator.illumination(for: date)
+            let expected = Double(p) / 100.0
+            XCTAssertEqual(illum, expected, accuracy: 0.015,
+                "USNO mismatch \(y)-\(m)-\(d): expected ~\(p)%, got \(Int((illum*100).rounded()))%")
+        }
     }
 }
