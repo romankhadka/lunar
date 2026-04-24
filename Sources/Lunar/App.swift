@@ -80,6 +80,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 Task { @MainActor in try? self.coordinator.updateWallpaper(force: true) }
             })
 
+        // setDesktopImageURL only writes the Space that is active on each
+        // screen at the moment of the call, so other Spaces keep whatever the
+        // system had stored for them. Re-pushing today's PNG whenever the
+        // active Space changes lets stale Spaces self-heal on first visit.
+        observers.append(nc.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in try? self.coordinator.reapplyToday() }
+            })
+
         appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) {
             [weak self] _, _ in
             guard let self else { return }

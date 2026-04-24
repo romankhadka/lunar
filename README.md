@@ -55,7 +55,7 @@ Lunar ships with NASA moon photography. To use your own imagery instead:
    - `waning_gibbous.png`
    - `last_quarter.png`
    - `waning_crescent.png`
-3. Click **Refresh Now**.
+3. Click **Refresh This Desktop**.
 
 Images should be square, RGB, with the moon centered on a near-black background. Northern Hemisphere orientation (waxing light on the right, waning light on the left). Any square resolution works — the app aspect-fits to your display.
 
@@ -63,7 +63,7 @@ Images should be square, RGB, with the moon centered on a near-black background.
 
 Lunar computes the current moon phase locally using Jean Meeus's *Astronomical Algorithms* (chs. 25, 47, 48) — full lunar and solar ephemeris with all 60+60 periodic terms, accurate to within 0.1% illumination against USNO reference data. The phase is bucketed into one of 8 named phases. The matching base image is composited with a thin overlay (`Waxing Gibbous · 87% · Apr 23`) in the bottom-right corner, scaled to the largest connected display, and applied to every screen via `NSWorkspace.setDesktopImageURL`.
 
-To defeat macOS's wallpaper cache (a known Sonoma+ quirk), after each apply the app politely restarts `WallpaperAgent` so the visible desktop repaints.
+macOS only lets that API touch the Space (Desktop) that is active on each screen at the moment of the call. To keep the other Spaces in sync, Lunar observes `activeSpaceDidChangeNotification` and silently re-applies today's wallpaper whenever you switch Desktops — each stale Desktop self-heals the first time you visit it.
 
 ## Logs
 

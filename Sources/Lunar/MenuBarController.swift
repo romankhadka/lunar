@@ -24,7 +24,7 @@ struct MenuBarContent: View {
             Text("Error: \(err)").foregroundColor(.red)
         }
         Divider()
-        Button("Refresh Now") { try? coordinator.updateWallpaper(force: true) }
+        Button("Refresh This Desktop") { try? coordinator.updateWallpaper(force: true) }
         Button("Open Phases Folder…", action: openPhasesFolder)
         Button("Open Log", action: openLog)
         Divider()
