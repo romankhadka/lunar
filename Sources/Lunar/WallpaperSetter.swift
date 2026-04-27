@@ -86,7 +86,8 @@ struct WallpaperSetter: WallpaperApplying {
                     for: screen,
                     options: [
                         .imageScaling: NSImageScaling.scaleProportionallyUpOrDown.rawValue,
-                        .allowClipping: false
+                        .allowClipping: false,
+                        .fillColor: NSColor.black
                     ])
             } catch {
                 Log.wallpaper.error("setDesktopImageURL failed for screen \(screen.localizedName, privacy: .public): \(error.localizedDescription, privacy: .public)")
