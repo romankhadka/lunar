@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lunar — your desktop, lit by tonight's moon</title>
+<meta name="description" content="A tiny macOS menu-bar app that paints your wallpaper with today's moon phase. Full Meeus ephemeris, NASA photography, no network, no telemetry." />
+<meta name="color-scheme" content="dark light" />
+<link rel="canonical" href="https://lunar.romn.dev/" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://lunar.romn.dev/" />
+<meta property="og:title" content="Lunar — your desktop, lit by tonight's moon" />
+<meta property="og:description" content="A tiny macOS menu-bar app that paints your wallpaper with today's moon phase, computed locally from Meeus's Astronomical Algorithms." />
+<meta property="og:image" content="https://lunar.romn.dev/assets/phases/waxing_gibbous.webp" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preload" as="image" href="assets/phases/full.webp" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A0C11'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23D8DEEA'/%3E%3Ccircle cx='11.6' cy='16' r='9' fill='%230A0C11'/%3E%3C/svg%3E" />
+
+<style>
+/* ══════════════════════════════════════════════════════════════
+   Lunar — landing page
+
+   The subject is a light source in a dark sky, so the page is
+   dark first and the moon is the only thing that glows. Every
+   number on this page — phase, illumination, age — is computed
+   in the browser by a port of Sources/Lunar/PhaseCalculator.swift,
+   so the page and the app always agree.
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark light;
+
+  --sky:      #07080C;
+  --sky-2:    #0C0E14;
+  --surface:  #10131B;
+  --raised:   #161A24;
+  --ink:      #E9ECF4;
+  --ink-2:    #9AA2B6;
+  --ink-3:    #666E84;
+  --rule:     rgba(233, 236, 244, 0.11);
+  --rule-2:   rgba(233, 236, 244, 0.22);
+  --accent:   #A8C4F2;
+  --accent-2: #C9DBFA;
+  --accent-soft: rgba(168, 196, 242, 0.12);
+  --good:     #7FCB98;
+  --shadow:   0 1px 2px rgba(0,0,0,.5), 0 18px 50px -22px rgba(0,0,0,.9);
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --measure: 34rem;
+  --gutter: clamp(1.15rem, 4.5vw, 3.25rem);
+  --ease: cubic-bezier(.2, .8, .3, 1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --sky:      #F3F5FA;
+    --sky-2:    #EAEEF6;
+    --surface:  #FFFFFF;
+    --raised:   #F7F9FD;
+    --ink:      #0F1219;
+    --ink-2:    #4B5364;
+    --ink-3:    #7A8296;
+    --rule:     rgba(15, 18, 25, 0.12);
+    --rule-2:   rgba(15, 18, 25, 0.24);
+    --accent:   #2C5AA8;
+    --accent-2: #1E4489;
+    --accent-soft: rgba(44, 90, 168, 0.09);
+    --good:     #2E6B41;
+    --shadow:   0 1px 2px rgba(30,40,60,.07), 0 16px 40px -20px rgba(30,40,60,.35);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -0.03em; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+a { color: inherit; text-underline-offset: .18em; }
+img { display: block; max-width: 100%; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.skip {
+  position: fixed; top: 0; left: 0; z-index: 99; transform: translateY(-120%);
+  background: var(--accent); color: var(--sky); padding: .7rem 1rem;
+  border-radius: 0 0 .5rem 0; font-size: .9rem; text-decoration: none; font-weight: 600;
+}
+.skip:focus { transform: translateY(0); }
+
+.shell { max-width: 74rem; margin-inline: auto; padding-inline: var(--gutter); }
+
+.eyebrow {
+  font-size: .7rem; font-weight: 600; letter-spacing: .17em;
+  text-transform: uppercase; color: var(--accent); margin: 0;
+}
+
+/* ── masthead ───────────────────────────────────────────────── */
+
+.masthead { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1.4rem; }
+.wordmark { display: inline-flex; align-items: center; gap: .6rem; font-size: 1.16rem; font-weight: 600; letter-spacing: -.03em; text-decoration: none; }
+.wordmark .glyph { width: 1.35rem; height: 1.35rem; border-radius: 50%; position: relative; background: var(--ink); overflow: hidden; flex: 0 0 auto; }
+.wordmark .glyph::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--sky); transform: translateX(-27%); }
+.masthead nav { display: flex; gap: 1.5rem; font-size: .875rem; color: var(--ink-2); }
+.masthead nav a { text-decoration: none; }
+.masthead nav a:hover { color: var(--ink); }
+@media (max-width: 48rem) { .masthead nav { display: none; } }
+
+/* ── hero ───────────────────────────────────────────────────── */
+
+.hero { padding-block: clamp(2rem, 6vw, 4rem) clamp(2rem, 5vw, 3.5rem); display: grid; gap: clamp(2.5rem, 5vw, 4rem); align-items: center; }
+.hero > * { min-width: 0; }
+@media (min-width: 64rem) { .hero { grid-template-columns: minmax(0, 30rem) minmax(0, 1fr); } }
+
+.hero h1 { font-size: clamp(2.6rem, 6.4vw, 4.15rem); line-height: 1.02; font-weight: 500; margin-block: 1rem .1rem; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero-lede { font-size: clamp(1.05rem, 1.7vw, 1.2rem); color: var(--ink-2); margin-top: 1.15rem; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.9rem; }
+.button {
+  display: inline-flex; align-items: center; gap: .45rem;
+  font-size: .92rem; font-weight: 550; padding: .68rem 1.15rem;
+  border-radius: .6rem; text-decoration: none; border: 1px solid transparent;
+  cursor: pointer; font-family: inherit;
+  transition: background-color .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+}
+.button-primary { background: var(--accent); color: #080A0F; }
+.button-primary:hover { background: var(--accent-2); }
+@media (prefers-color-scheme: light) { .button-primary { color: #fff; } }
+.button-quiet { border-color: var(--rule-2); color: var(--ink); }
+.button-quiet:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.hero-note { margin-top: 1.1rem; font-size: .84rem; color: var(--ink-3); }
+
+/* ── the desktop preview ────────────────────────────────────── */
+
+.desk {
+  border-radius: .8rem; overflow: hidden; border: 1px solid var(--rule);
+  background: #000; box-shadow: var(--shadow);
+}
+.menubar {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0 .8rem; height: 1.65rem;
+  background: rgba(255,255,255,.07);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  font-size: .62rem; color: rgba(255,255,255,.72); letter-spacing: .01em;
+}
+.menubar .apple { font-size: .78rem; line-height: 1; opacity: .85; }
+.menubar .spacer { margin-left: auto; }
+.menubar .mb-moon {
+  width: .68rem; height: .68rem; border-radius: 50%; position: relative;
+  background: rgba(255,255,255,.9); overflow: hidden; display: inline-block; vertical-align: -1px;
+}
+.menubar .mb-moon::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: #1b1d22; transform: translateX(-28%); }
+.menubar .clock { font-variant-numeric: tabular-nums; }
+
+/* the wallpaper itself: aspect-fit on black, overlay bottom-right —
+   the geometry Compositor.swift produces */
+.wall {
+  position: relative; aspect-ratio: 16 / 10; background: #000;
+  display: grid; place-items: center; overflow: hidden;
+  container-type: size;
+}
+.wall img { width: min(78%, 78cqh); height: auto; aspect-ratio: 1; object-fit: contain; }
+.wall .glow {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(190,210,245,.13), transparent 46%);
+}
+/* fontSize = canvas height × 0.015; margin = canvas width × 0.0125 */
+.wall .overlay {
+  position: absolute; right: 1.25cqw; bottom: 1.25cqw;
+  font-size: max(9px, 1.5cqh); font-weight: 300; letter-spacing: .5px;
+  color: rgba(232,232,232,.7); white-space: nowrap;
+}
+
+/* the scrubber */
+.scrub { margin-top: 1.1rem; display: flex; flex-direction: column; gap: .55rem; }
+.scrub-row { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; }
+.scrub label { font-size: .78rem; color: var(--ink-3); }
+input[type="range"] {
+  flex: 1 1 14rem; min-width: 10rem; appearance: none; background: transparent; cursor: grab; height: 1.5rem; margin: 0;
+}
+input[type="range"]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: var(--rule-2); }
+input[type="range"]::-moz-range-track { height: 3px; border-radius: 2px; background: var(--rule-2); }
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--accent); margin-top: -6px; border: 0;
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 15px; height: 15px; border-radius: 50%; background: var(--accent); border: 0;
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.reset {
+  border: 1px solid var(--rule-2); background: transparent; color: var(--ink-2);
+  font-family: inherit; font-size: .74rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; padding: .34rem .6rem; border-radius: .38rem; cursor: pointer;
+}
+.reset:hover { color: var(--accent); border-color: var(--accent); }
+
+/* live readout */
+.readout {
+  display: grid; grid-template-columns: 1.35fr 1fr 1fr;
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+  border-radius: .6rem; overflow: hidden; margin-top: 1.1rem;
+}
+.readout div { background: var(--surface); padding: .8rem .9rem; min-width: 0; }
+.readout dt { font-size: .66rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); }
+.readout dd { margin: .25rem 0 0; font-family: var(--mono); font-size: .95rem; font-variant-numeric: tabular-nums; letter-spacing: -.03em; white-space: nowrap; }
+
+/* ── sections ───────────────────────────────────────────────── */
+
+section { padding-block: clamp(3.5rem, 8vw, 6.5rem); }
+.band { background: var(--sky-2); border-block: 1px solid var(--rule); }
+.head { max-width: var(--measure); margin-bottom: clamp(2rem, 4vw, 3rem); }
+.head h2 { font-size: clamp(1.9rem, 4.4vw, 2.9rem); line-height: 1.08; margin-block: .7rem .85rem; }
+.head p { color: var(--ink-2); font-size: 1.04rem; }
+.prose { max-width: var(--measure); color: var(--ink-2); display: flex; flex-direction: column; gap: 1.05rem; }
+.prose strong { color: var(--ink); font-weight: 600; }
+code, .ic {
+  font-family: var(--mono); font-size: .86em; color: var(--ink);
+  background: var(--accent-soft); padding: .1em .35em; border-radius: .25rem;
+}
+
+/* ── phase strip ────────────────────────────────────────────── */
+
+.strip { display: grid; grid-template-columns: repeat(8, 1fr); gap: clamp(.35rem, 1vw, .9rem); }
+@media (max-width: 46rem) { .strip { grid-template-columns: repeat(4, 1fr); row-gap: 1.2rem; } }
+.ph { display: flex; flex-direction: column; align-items: center; gap: .55rem; text-align: center; }
+.ph .disc {
+  width: 100%; aspect-ratio: 1; border-radius: 50%; overflow: hidden;
+  background: #05070B; position: relative;
+  border: 1px solid var(--rule);
+}
+.ph.now .disc { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ph .disc img { width: 100%; height: 100%; object-fit: cover; }
+.ph b { font-size: .72rem; font-weight: 550; color: var(--ink-2); line-height: 1.25; }
+.ph.now b { color: var(--accent); }
+.ph span { font-family: var(--mono); font-size: .66rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* ── accuracy chart ─────────────────────────────────────────── */
+
+.figure { border: 1px solid var(--rule); border-radius: .8rem; background: var(--surface); padding: 1.4rem 1.4rem 1.1rem; box-shadow: var(--shadow); }
+.figure figcaption { font-size: .84rem; color: var(--ink-3); margin-top: 1rem; line-height: 1.5; }
+.chart { position: relative; height: 10rem; margin-top: .4rem; }
+.chart .tol {
+  position: absolute; left: 0; right: 0; border-top: 1px dashed var(--rule-2);
+  color: var(--ink-3); font-size: .68rem; font-family: var(--mono);
+}
+.chart .tol span { position: absolute; right: 0; top: -1.15em; background: var(--surface); padding-left: .4rem; }
+.bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: clamp(2px, .7vw, 7px); }
+.bar { flex: 1 1 0; position: relative; display: flex; align-items: flex-end; height: 100%; background: none; border: 0; padding: 0; cursor: default; }
+.bar i {
+  display: block; width: 100%; background: var(--accent);
+  border-radius: 4px 4px 0 0; min-height: 2px;
+  transition: background-color .12s var(--ease);
+}
+.bar:hover i, .bar:focus-visible i { background: var(--accent-2); }
+/* display:none rather than opacity:0 — a hidden absolute tooltip still
+   widens the document, which showed up as horizontal scroll on phones. */
+.bar .tip {
+  display: none;
+  position: absolute; bottom: calc(100% + .5rem); left: 50%; transform: translateX(-50%);
+  background: var(--raised); border: 1px solid var(--rule-2); border-radius: .4rem;
+  padding: .45rem .6rem; font-family: var(--mono); font-size: .7rem; color: var(--ink);
+  white-space: nowrap; pointer-events: none;
+  z-index: 4; box-shadow: var(--shadow); font-variant-numeric: tabular-nums;
+}
+.bar:hover .tip, .bar:focus-visible .tip { display: block; }
+/* keep the end tooltips inside the figure */
+.bar:first-child .tip { left: 0; transform: none; }
+.bar:last-child  .tip { left: auto; right: 0; transform: none; }
+.axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .66rem; color: var(--ink-3); margin-top: .5rem; }
+details.table { margin-top: 1rem; }
+details.table summary { cursor: pointer; font-size: .82rem; color: var(--ink-2); }
+details.table summary:hover { color: var(--accent); }
+table { width: 100%; border-collapse: collapse; margin-top: .8rem; font-family: var(--mono); font-size: .76rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: .34rem .5rem; border-bottom: 1px solid var(--rule); }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-3); font-weight: 600; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
+
+/* ── behaviour ──────────────────────────────────────────────── */
+
+.facts { display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.fact { display: grid; gap: .3rem 2rem; padding: 1.15rem 0; border-bottom: 1px solid var(--rule); }
+@media (min-width: 48rem) { .fact { grid-template-columns: 16rem minmax(0,1fr); align-items: baseline; } }
+.fact h3 { font-size: 1rem; font-weight: 600; }
+.fact p { color: var(--ink-2); font-size: .95rem; }
+
+.nums { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: .7rem; overflow: hidden; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); margin-top: 2.5rem; }
+.num { background: var(--surface); padding: 1.2rem 1.1rem; display: flex; flex-direction: column; gap: .2rem; }
+.num b { font-family: var(--mono); font-size: 1.55rem; font-weight: 600; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.num span { font-size: .8rem; color: var(--ink-2); line-height: 1.4; }
+
+/* ── install ────────────────────────────────────────────────── */
+
+.paths { display: grid; gap: 1.1rem; align-items: start; }
+@media (min-width: 54rem) { .paths { grid-template-columns: 1fr 1fr; } }
+.path { border: 1px solid var(--rule); border-radius: .8rem; padding: 1.45rem 1.35rem; background: var(--surface); display: flex; flex-direction: column; gap: .85rem; align-items: flex-start; min-width: 0; max-width: 100%; }
+.path > * { max-width: 100%; }
+.path.lead { border-color: var(--accent); }
+.path h3 { font-size: 1.1rem; font-weight: 600; }
+.path p { font-size: .93rem; color: var(--ink-2); }
+.path ol { margin: 0; padding-left: 1.1rem; font-size: .92rem; color: var(--ink-2); display: flex; flex-direction: column; gap: .45rem; }
+.cmd {
+  display: flex; align-items: center; gap: .7rem; width: 100%;
+  padding: .5rem .5rem .5rem .85rem; border: 1px solid var(--rule);
+  border-radius: .55rem; background: var(--raised);
+  font-family: var(--mono); font-size: .82rem; overflow: hidden;
+}
+.cmd code { background: none; padding: 0; white-space: pre; overflow-x: auto; min-width: 0; flex: 1 1 auto; color: var(--ink); }
+.copy {
+  flex: 0 0 auto; border: 1px solid var(--rule); background: transparent; color: var(--ink-2);
+  font-family: inherit; font-size: .68rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; padding: .32rem .55rem; border-radius: .35rem; cursor: pointer;
+}
+.copy:hover, .copy[data-done="1"] { color: var(--accent); border-color: var(--accent); }
+
+.files { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .5rem; margin-top: 1.2rem; }
+.files code { display: block; background: var(--raised); border: 1px solid var(--rule); border-radius: .4rem; padding: .5rem .65rem; font-size: .78rem; color: var(--ink-2); }
+
+footer { border-top: 1px solid var(--rule); padding-block: 2.5rem 3.5rem; font-size: .86rem; color: var(--ink-3); }
+.foot-row { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; align-items: center; }
+footer a { color: var(--ink-2); text-decoration: none; }
+footer a:hover { color: var(--accent); }
+.foot-links { display: flex; flex-wrap: wrap; gap: 1.35rem; }
+.colophon { margin-top: 1.5rem; max-width: 42rem; line-height: 1.6; font-size: .82rem; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="shell">
+  <header class="masthead">
+    <a class="wordmark" href="/"><span class="glyph"></span> Lunar</a>
+    <nav>
+      <a href="#cycle">The cycle</a>
+      <a href="#math">The math</a>
+      <a href="#behaviour">Behaviour</a>
+      <a href="#install">Install</a>
+    </nav>
+  </header>
+</div>
+
+<main id="main">
+  <div class="shell">
+    <div class="hero">
+      <div>
+        <p class="eyebrow">macOS menu bar · 14 Sonoma or newer</p>
+        <h1>Your desktop, lit by <em>tonight's moon</em>.</h1>
+        <p class="hero-lede">
+          Lunar paints your wallpaper with the moon as it actually is today —
+          computed on your Mac from Jean Meeus's <em>Astronomical Algorithms</em>,
+          painted with NASA photography, updated silently every morning.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="https://github.com/romankhadka/lunar/releases/latest">Download the DMG</a>
+          <a class="button button-quiet" href="#install">Build from source</a>
+          <a class="button button-quiet" href="https://github.com/romankhadka/lunar">View source</a>
+        </div>
+        <p class="hero-note">Free and MIT-licensed · about 20&nbsp;MB of memory · zero network calls</p>
+
+        <dl class="readout">
+          <div><dt>Phase</dt><dd id="r-phase">—</dd></div>
+          <div><dt>Illuminated</dt><dd id="r-illum">—</dd></div>
+          <div><dt>Age</dt><dd id="r-age">—</dd></div>
+        </dl>
+      </div>
+
+      <div>
+        <div class="desk">
+          <div class="menubar">
+            <span class="apple" aria-hidden="true">&#63743;</span>
+            <span>Finder</span><span>File</span><span>Edit</span><span>View</span>
+            <span class="spacer"></span>
+            <span class="mb-moon" aria-hidden="true"></span>
+            <span class="clock" id="mb-clock">—</span>
+          </div>
+          <div class="wall">
+            <div class="glow" aria-hidden="true"></div>
+            <img id="wall-img" src="assets/phases/full.webp" alt="" width="800" height="800" />
+            <span class="overlay" id="wall-overlay">—</span>
+          </div>
+        </div>
+
+        <div class="scrub">
+          <div class="scrub-row">
+            <label for="scrubber">Scrub a lunation</label>
+            <input type="range" id="scrubber" min="0" max="29.53" step="0.25" value="0"
+                   aria-label="Days ahead of today" />
+            <button class="reset" id="scrub-reset" type="button">Today</button>
+          </div>
+          <p style="font-size:.8rem;color:var(--ink-3)" id="scrub-date">—</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ the cycle ══ -->
+  <section id="cycle" class="band">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">The cycle</p>
+        <h2>Eight photographs, one synodic month</h2>
+        <p>
+          Lunar ships eight public-domain photographs from NASA's Scientific
+          Visualization Studio — one per phase. The synodic month is divided into
+          eight buckets of 3.691 days, each centred on its astronomical event, so the
+          picture on your desktop is the one that matches the sky.
+        </p>
+      </div>
+      <div class="strip" id="strip"></div>
+      <p class="prose" style="margin-top:1.8rem;font-size:.92rem">
+        Northern-hemisphere orientation: the lit limb is on the right while waxing,
+        on the left while waning. Percentages above are today's illumination at each
+        phase's centre, not a fixed table.
+      </p>
+    </div>
+  </section>
+
+  <!-- ══ the math ══ -->
+  <section id="math">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">The math</p>
+        <h2>Not an approximation of the moon</h2>
+        <p>
+          Most moon widgets divide the days since a reference new moon by 29.53 and
+          call it a phase. That drifts, because the moon does not keep a constant
+          pace. Lunar runs the real ephemeris.
+        </p>
+      </div>
+
+      <div class="prose" style="margin-bottom:2.5rem">
+        <p>
+          <strong>Meeus chapters 25, 47 and 48</strong>, in full: solar position with
+          the equation of centre, lunar position with all
+          <strong>120 periodic terms</strong> (60 for longitude and distance, 60 for
+          latitude), the planetary perturbation corrections, and the illuminated
+          fraction from the true Sun–Earth–Moon phase angle rather than a mean cycle.
+        </p>
+        <p>
+          The chart below is the proof, and it is not a screenshot. Your browser is
+          running a direct port of
+          <span class="ic">Sources/Lunar/PhaseCalculator.swift</span> right now and
+          comparing its output against twenty published U.S. Naval Observatory
+          illumination values from the app's own test suite.
+        </p>
+      </div>
+
+      <figure class="figure" style="margin:0">
+        <div class="chart" id="chart" role="img" aria-labelledby="chart-cap">
+          <div class="tol" id="tol-line"><span>1.5 pt test tolerance</span></div>
+          <div class="bars" id="bars"></div>
+        </div>
+        <div class="axis"><span id="ax-first">—</span><span id="ax-last">—</span></div>
+        <figcaption id="chart-cap">
+          Absolute difference between Lunar's computed illumination and the USNO's
+          published figure, in percentage points, for twenty dates spanning 2024–2026.
+          The USNO reports whole percentages, so up to 0.5&nbsp;points of every bar is
+          its own rounding. Largest disagreement: <strong id="worst">—</strong>.
+        </figcaption>
+        <details class="table">
+          <summary>Show the numbers</summary>
+          <table>
+            <thead><tr><th>Date (12:00 UT)</th><th>USNO</th><th>Lunar</th><th>Δ</th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </details>
+      </figure>
+
+      <div class="nums">
+        <div class="num"><b>120</b><span>periodic terms evaluated per calculation</span></div>
+        <div class="num"><b>1,002</b><span>lines of Swift, no dependencies</span></div>
+        <div class="num"><b>42</b><span>unit tests, about 0.1&nbsp;s</span></div>
+        <div class="num"><b>0</b><span>network calls, ever</span></div>
+        <div class="num"><b>8</b><span>NASA photographs, public domain</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ behaviour ══ -->
+  <section id="behaviour" class="band">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">Behaviour</p>
+        <h2>Quiet, and correct about the awkward parts</h2>
+        <p>
+          Setting a wallpaper on macOS is deceptively fiddly. These are the cases
+          Lunar handles so you never think about it.
+        </p>
+      </div>
+      <div class="facts">
+        <div class="fact"><h3>Every morning, and on wake</h3><p>Runs once a day plus on every wake-from-sleep, so the desktop is never showing yesterday's moon after the lid comes up.</p></div>
+        <div class="fact"><h3>Every connected display</h3><p>Paints all screens and re-applies when a monitor is plugged or unplugged, scaling to the largest display attached.</p></div>
+        <div class="fact"><h3>Every Space, eventually</h3><p>macOS only lets the wallpaper API touch the Space active on each screen at that moment. Lunar watches <span class="ic">activeSpaceDidChangeNotification</span> and re-applies quietly, so each stale Desktop heals the first time you visit it.</p></div>
+        <div class="fact"><h3>Light and dark</h3><p>Keeps both appearance slots in sync, so switching themes never reverts you to the default wallpaper.</p></div>
+        <div class="fact"><h3>No Dock icon</h3><p>One moon in the menu bar. Click it for today's phase, the next phase, refresh, the log, launch-at-login and quit.</p></div>
+        <div class="fact"><h3>Nothing leaves the Mac</h3><p>No network calls, no telemetry, no accounts, no dependencies. The ephemeris is arithmetic, so it needs nothing but the clock.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ install ══ -->
+  <section id="install">
+    <div class="shell">
+      <div class="head">
+        <p class="eyebrow">Install</p>
+        <h2>Two minutes, then never again</h2>
+        <p>Requires macOS 14 (Sonoma) or newer. Building from source additionally needs Xcode 15+ or the Swift command line tools.</p>
+      </div>
+
+      <div class="paths">
+        <div class="path lead">
+          <p class="eyebrow">Easiest</p>
+          <h3>Download the DMG</h3>
+          <ol>
+            <li>Grab the latest DMG from the releases page.</li>
+            <li>Open it and drag <strong>Lunar.app</strong> into <strong>Applications</strong>.</li>
+            <li>The build is ad-hoc signed and not notarised, so the first launch needs a right-click&nbsp;→&nbsp;<strong>Open</strong>. Every launch after that is normal.</li>
+          </ol>
+          <a class="button button-primary" href="https://github.com/romankhadka/lunar/releases/latest">Latest release</a>
+        </div>
+
+        <div class="path">
+          <p class="eyebrow">From source</p>
+          <h3>Clone and install</h3>
+          <p>The script assembles and installs the app bundle into <span class="ic">~/Applications</span>.</p>
+          <div class="cmd"><code id="c-src">git clone https://github.com/romankhadka/lunar.git
+cd lunar &amp;&amp; ./scripts/install.sh
+open ~/Applications/Lunar.app</code><button class="copy" data-copy="#c-src" type="button">Copy</button></div>
+        </div>
+
+        <div class="path">
+          <p class="eyebrow">Optional</p>
+          <h3>Your own imagery</h3>
+          <p>Menu&nbsp;→ <strong>Open Phases Folder…</strong>, drop in eight square PNGs named exactly like this, then <strong>Refresh This Desktop</strong>. Any square resolution works.</p>
+          <div class="files">
+            <code>new.png</code><code>waxing_crescent.png</code><code>first_quarter.png</code><code>waxing_gibbous.png</code>
+            <code>full.png</code><code>waning_gibbous.png</code><code>last_quarter.png</code><code>waning_crescent.png</code>
+          </div>
+        </div>
+
+        <div class="path">
+          <p class="eyebrow">If something looks wrong</p>
+          <h3>The log</h3>
+          <p>Menu&nbsp;→ <strong>Open Log</strong>, or read it directly. Rotates at 1&nbsp;MB.</p>
+          <div class="cmd"><code id="c-log">~/Library/Logs/Lunar/lunar.log</code><button class="copy" data-copy="#c-log" type="button">Copy</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="shell foot-row">
+    <a class="wordmark" href="/" style="font-size:1rem"><span class="glyph" style="width:1.1rem;height:1.1rem"></span> Lunar</a>
+    <div class="foot-links">
+      <a href="https://github.com/romankhadka/lunar">GitHub</a>
+      <a href="https://github.com/romankhadka/lunar/releases">Releases</a>
+      <a href="https://github.com/romankhadka/lunar/blob/main/LICENSE">MIT licence</a>
+    </div>
+  </div>
+  <div class="shell">
+    <p class="colophon">
+      Moon photography: NASA Scientific Visualization Studio / Goddard Space Flight
+      Center — a work of the U.S. federal government, in the public domain. Phase
+      mathematics derived from Jean Meeus, <em>Astronomical Algorithms</em>
+      (2nd&nbsp;ed., Willmann-Bell, 1998). Reference illumination figures from the
+      United States Naval Observatory.
+    </p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ── Meeus, ported from Sources/Lunar/PhaseCalculator.swift ──
+     Tables 47.A and 47.B are extracted from the Swift source rather
+     than retyped, so the page cannot drift from the app. */
+  const T = {"lr": [[0.0, 0.0, 1.0, 0.0, 6288774.0, -20905355.0], [2.0, 0.0, -1.0, 0.0, 1274027.0, -3699111.0], [2.0, 0.0, 0.0, 0.0, 658314.0, -2955968.0], [0.0, 0.0, 2.0, 0.0, 213618.0, -569925.0], [0.0, 1.0, 0.0, 0.0, -185116.0, 48888.0], [0.0, 0.0, 0.0, 2.0, -114332.0, -3149.0], [2.0, 0.0, -2.0, 0.0, 58793.0, 246158.0], [2.0, -1.0, -1.0, 0.0, 57066.0, -152138.0], [2.0, 0.0, 1.0, 0.0, 53322.0, -170733.0], [2.0, -1.0, 0.0, 0.0, 45758.0, -204586.0], [0.0, 1.0, -1.0, 0.0, -40923.0, -129620.0], [1.0, 0.0, 0.0, 0.0, -34720.0, 108743.0], [0.0, 1.0, 1.0, 0.0, -30383.0, 104755.0], [2.0, 0.0, 0.0, -2.0, 15327.0, 10321.0], [0.0, 0.0, 1.0, 2.0, -12528.0, 0.0], [0.0, 0.0, 1.0, -2.0, 10980.0, 79661.0], [4.0, 0.0, -1.0, 0.0, 10675.0, -34782.0], [0.0, 0.0, 3.0, 0.0, 10034.0, -23210.0], [4.0, 0.0, -2.0, 0.0, 8548.0, -21636.0], [2.0, 1.0, -1.0, 0.0, -7888.0, 24208.0], [2.0, 1.0, 0.0, 0.0, -6766.0, 30824.0], [1.0, 0.0, -1.0, 0.0, -5163.0, -8379.0], [1.0, 1.0, 0.0, 0.0, 4987.0, -16675.0], [2.0, -1.0, 1.0, 0.0, 4036.0, -12831.0], [2.0, 0.0, 2.0, 0.0, 3994.0, -10445.0], [4.0, 0.0, 0.0, 0.0, 3861.0, -11650.0], [2.0, 0.0, -3.0, 0.0, 3665.0, 14403.0], [0.0, 1.0, -2.0, 0.0, -2689.0, -7003.0], [2.0, 0.0, -1.0, 2.0, -2602.0, 0.0], [2.0, -1.0, -2.0, 0.0, 2390.0, 10056.0], [1.0, 0.0, 1.0, 0.0, -2348.0, 6322.0], [2.0, -2.0, 0.0, 0.0, 2236.0, -9884.0], [0.0, 1.0, 2.0, 0.0, -2120.0, 5751.0], [0.0, 2.0, 0.0, 0.0, -2069.0, 0.0], [2.0, -2.0, -1.0, 0.0, 2048.0, -4950.0], [2.0, 0.0, 1.0, -2.0, -1773.0, 4130.0], [2.0, 0.0, 0.0, 2.0, -1595.0, 0.0], [4.0, -1.0, -1.0, 0.0, 1215.0, -3958.0], [0.0, 0.0, 2.0, 2.0, -1110.0, 0.0], [3.0, 0.0, -1.0, 0.0, -892.0, 3258.0], [2.0, 1.0, 1.0, 0.0, -810.0, 2616.0], [4.0, -1.0, -2.0, 0.0, 759.0, -1897.0], [0.0, 2.0, -1.0, 0.0, -713.0, -2117.0], [2.0, 2.0, -1.0, 0.0, -700.0, 2354.0], [2.0, 1.0, -2.0, 0.0, 691.0, 0.0], [2.0, -1.0, 0.0, -2.0, 596.0, 0.0], [4.0, 0.0, 1.0, 0.0, 549.0, -1423.0], [0.0, 0.0, 4.0, 0.0, 537.0, -1117.0], [4.0, -1.0, 0.0, 0.0, 520.0, -1571.0], [1.0, 0.0, -2.0, 0.0, -487.0, -1739.0], [2.0, 1.0, 0.0, -2.0, -399.0, 0.0], [0.0, 0.0, 2.0, -2.0, -381.0, -4421.0], [1.0, 1.0, 1.0, 0.0, 351.0, 0.0], [3.0, 0.0, -2.0, 0.0, -340.0, 0.0], [4.0, 0.0, -3.0, 0.0, 330.0, 0.0], [2.0, -1.0, 2.0, 0.0, 327.0, 0.0], [0.0, 2.0, 1.0, 0.0, -323.0, 1165.0], [1.0, 1.0, -1.0, 0.0, 299.0, 0.0], [2.0, 0.0, 3.0, 0.0, 294.0, 0.0], [2.0, 0.0, -1.0, -2.0, 0.0, 8752.0]], "b": [[0.0, 0.0, 0.0, 1.0, 5128122.0], [0.0, 0.0, 1.0, 1.0, 280602.0], [0.0, 0.0, 1.0, -1.0, 277693.0], [2.0, 0.0, 0.0, -1.0, 173237.0], [2.0, 0.0, -1.0, 1.0, 55413.0], [2.0, 0.0, -1.0, -1.0, 46271.0], [2.0, 0.0, 0.0, 1.0, 32573.0], [0.0, 0.0, 2.0, 1.0, 17198.0], [2.0, 0.0, 1.0, -1.0, 9266.0], [0.0, 0.0, 2.0, -1.0, 8822.0], [2.0, -1.0, 0.0, -1.0, 8216.0], [2.0, 0.0, -2.0, -1.0, 4324.0], [2.0, 0.0, 1.0, 1.0, 4200.0], [2.0, 1.0, 0.0, -1.0, -3359.0], [2.0, -1.0, -1.0, 1.0, 2463.0], [2.0, -1.0, 0.0, 1.0, 2211.0], [2.0, -1.0, -1.0, -1.0, 2065.0], [0.0, 1.0, -1.0, -1.0, -1870.0], [4.0, 0.0, -1.0, -1.0, 1828.0], [0.0, 1.0, 0.0, 1.0, -1794.0], [0.0, 0.0, 0.0, 3.0, -1749.0], [0.0, 1.0, -1.0, 1.0, -1565.0], [1.0, 0.0, 0.0, 1.0, -1491.0], [0.0, 1.0, 1.0, 1.0, -1475.0], [0.0, 1.0, 1.0, -1.0, -1410.0], [0.0, 1.0, 0.0, -1.0, -1344.0], [1.0, 0.0, 0.0, -1.0, -1335.0], [0.0, 0.0, 3.0, 1.0, 1107.0], [4.0, 0.0, 0.0, -1.0, 1021.0], [4.0, 0.0, -1.0, 1.0, 833.0], [0.0, 0.0, 1.0, -3.0, 777.0], [4.0, 0.0, -2.0, 1.0, 671.0], [2.0, 0.0, 0.0, -3.0, 607.0], [2.0, 0.0, 2.0, -1.0, 596.0], [2.0, -1.0, 1.0, -1.0, 491.0], [2.0, 0.0, -2.0, 1.0, -451.0], [0.0, 0.0, 3.0, -1.0, 439.0], [2.0, 0.0, 2.0, 1.0, 422.0], [2.0, 0.0, -3.0, -1.0, 421.0], [2.0, 1.0, -1.0, 1.0, -366.0], [2.0, 1.0, 0.0, 1.0, -351.0], [4.0, 0.0, 0.0, 1.0, 331.0], [2.0, -1.0, 1.0, 1.0, 315.0], [2.0, -2.0, 0.0, -1.0, 302.0], [0.0, 0.0, 1.0, 3.0, -283.0], [2.0, 1.0, 1.0, -1.0, -229.0], [1.0, 1.0, 0.0, -1.0, 223.0], [1.0, 1.0, 0.0, 1.0, 223.0], [0.0, 1.0, -2.0, -1.0, -220.0], [2.0, 1.0, -1.0, -1.0, -220.0], [1.0, 0.0, 1.0, 1.0, -185.0], [2.0, -1.0, -2.0, -1.0, 181.0], [0.0, 1.0, 2.0, 1.0, -177.0], [4.0, 0.0, -2.0, -1.0, 176.0], [4.0, -1.0, -1.0, -1.0, 166.0], [1.0, 0.0, 1.0, -1.0, -164.0], [4.0, 0.0, 1.0, -1.0, 132.0], [1.0, 0.0, -1.0, -1.0, -119.0], [4.0, -1.0, 0.0, -1.0, 115.0], [2.0, -2.0, 0.0, 1.0, 107.0]]};
+  const TERMS_LR = T.lr, TERMS_B = T.b;
+
+  const SYNODIC = 29.530588853;
+  const RAD = Math.PI / 180;
+  const norm = (x) => { const r = x % 360; return r < 0 ? r + 360 : r; };
+
+  function julianDay(d) {
+    let Y = d.getUTCFullYear(), M = d.getUTCMonth() + 1;
+    const D = d.getUTCDate() + d.getUTCHours() / 24 + d.getUTCMinutes() / 1440
+            + d.getUTCSeconds() / 86400 + d.getUTCMilliseconds() / 86400000;
+    if (M <= 2) { Y -= 1; M += 12; }
+    const A = Math.floor(Y / 100), B = 2 - A + Math.floor(A / 4);
+    return Math.floor(365.25 * (Y + 4716)) + Math.floor(30.6001 * (M + 1)) + D + B - 1524.5;
+  }
+
+  function solarPosition(jd) {
+    const t = (jd - 2451545.0) / 36525.0;
+    const L0 = norm(280.46646 + 36000.76983 * t + 0.0003032 * t * t);
+    const M = norm(357.52911 + 35999.05029 * t - 0.0001537 * t * t);
+    const Mr = M * RAD;
+    const C = (1.914602 - 0.004817 * t - 0.000014 * t * t) * Math.sin(Mr)
+            + (0.019993 - 0.000101 * t) * Math.sin(2 * Mr)
+            + 0.000289 * Math.sin(3 * Mr);
+    const omega = 125.04 - 1934.136 * t;
+    const lambda = (L0 + C) - 0.00569 - 0.00478 * Math.sin(omega * RAD);
+    const e = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
+    const R = (1.000001018 * (1 - e * e)) / (1 + e * Math.cos((M + C) * RAD));
+    return { lon: norm(lambda), R };
+  }
+
+  function moonPosition(jd) {
+    const t = (jd - 2451545.0) / 36525.0, t2 = t * t, t3 = t2 * t, t4 = t3 * t;
+    const Lp = norm(218.3164477 + 481267.88123421 * t - 0.0015786 * t2 + t3 / 538841 - t4 / 65194000);
+    const D  = norm(297.8501921 + 445267.1114034 * t - 0.0018819 * t2 + t3 / 545868 - t4 / 113065000);
+    const M  = norm(357.5291092 + 35999.0502909 * t - 0.0001536 * t2 + t3 / 24490000);
+    const Mp = norm(134.9633964 + 477198.8675055 * t + 0.0087414 * t2 + t3 / 69699 - t4 / 14712000);
+    const F  = norm(93.2720950 + 483202.0175233 * t - 0.0036539 * t2 - t3 / 3526000 + t4 / 863310000);
+    const E = 1.0 - 0.002516 * t - 0.0000074 * t2, E2 = E * E;
+    const Dr = D * RAD, Mr = M * RAD, Mpr = Mp * RAD, Fr = F * RAD;
+
+    let sL = 0, sR = 0, sB = 0;
+    for (let i = 0; i < TERMS_LR.length; i++) {
+      const r = TERMS_LR[i];
+      const arg = r[0] * Dr + r[1] * Mr + r[2] * Mpr + r[3] * Fr;
+      const am = Math.abs(r[1]);
+      const ef = am === 1 ? E : am === 2 ? E2 : 1;
+      sL += r[4] * ef * Math.sin(arg);
+      sR += r[5] * ef * Math.cos(arg);
+    }
+    for (let i = 0; i < TERMS_B.length; i++) {
+      const r = TERMS_B[i];
+      const arg = r[0] * Dr + r[1] * Mr + r[2] * Mpr + r[3] * Fr;
+      const am = Math.abs(r[1]);
+      const ef = am === 1 ? E : am === 2 ? E2 : 1;
+      sB += r[4] * ef * Math.sin(arg);
+    }
+    const A1 = norm(119.75 + 131.849 * t);
+    const A2 = norm(53.09 + 479264.290 * t);
+    const A3 = norm(313.45 + 481266.484 * t);
+    sL += 3958 * Math.sin(A1 * RAD) + 1962 * Math.sin((Lp - F) * RAD) + 318 * Math.sin(A2 * RAD);
+    sB += -2235 * Math.sin(Lp * RAD) + 382 * Math.sin(A3 * RAD)
+        + 175 * Math.sin((A1 - F) * RAD) + 175 * Math.sin((A1 + F) * RAD)
+        + 127 * Math.sin((Lp - Mp) * RAD) - 115 * Math.sin((Lp + Mp) * RAD);
+
+    return { lon: norm(Lp + sL / 1e6), lat: sB / 1e6, dist: 385000.56 + sR / 1000.0 };
+  }
+
+  function illumination(date) {
+    const jd = julianDay(date);
+    const s = solarPosition(jd), m = moonPosition(jd);
+    const cosPsi = Math.cos(m.lat * RAD) * Math.cos((m.lon - s.lon) * RAD);
+    const psi = Math.acos(Math.max(-1, Math.min(1, cosPsi)));
+    const Rkm = s.R * 149597870.7;
+    let i = Math.atan2(Rkm * Math.sin(psi), m.dist - Rkm * Math.cos(psi)) / RAD;
+    if (i < 0) i += 360;
+    return (1 + Math.cos(i * RAD)) / 2;
+  }
+
+  function synodicAge(date) {
+    const jd = julianDay(date);
+    let d = (moonPosition(jd).lon - solarPosition(jd).lon) % 360;
+    if (d < 0) d += 360;
+    return (d / 360) * SYNODIC;
+  }
+
+  const PHASES = ["new", "waxing_crescent", "first_quarter", "waxing_gibbous",
+                  "full", "waning_gibbous", "last_quarter", "waning_crescent"];
+  const LABELS = { new: "New Moon", waxing_crescent: "Waxing Crescent",
+                   first_quarter: "First Quarter", waxing_gibbous: "Waxing Gibbous",
+                   full: "Full Moon", waning_gibbous: "Waning Gibbous",
+                   last_quarter: "Last Quarter", waning_crescent: "Waning Crescent" };
+
+  function phaseName(age) {
+    const bucket = SYNODIC / 8;
+    let shifted = (age + bucket / 2) % SYNODIC;
+    if (shifted < 0) shifted += SYNODIC;
+    return PHASES[Math.floor(shifted / bucket) % 8];
+  }
+
+  const phaseFor = (date) => {
+    const age = synodicAge(date);
+    return { age, illum: illumination(date), name: phaseName(age) };
+  };
+
+  /* ── the hero ──────────────────────────────────────────────── */
+
+  const $ = (s) => document.querySelector(s);
+  const img = $("#wall-img"), overlay = $("#wall-overlay");
+  const rPhase = $("#r-phase"), rIllum = $("#r-illum"), rAge = $("#r-age");
+  const scrubber = $("#scrubber"), scrubDate = $("#scrub-date"), clock = $("#mb-clock");
+
+  const MD = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+  const FULL = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
+
+  function paint(date, isToday) {
+    const p = phaseFor(date);
+    const pct = Math.round(p.illum * 100);
+    img.src = `assets/phases/${p.name}.webp`;
+    img.alt = `${LABELS[p.name]}, ${pct} percent illuminated`;
+    // Exactly the string Compositor.swift draws.
+    overlay.textContent = `${LABELS[p.name]} · ${pct}% · ${MD.format(date)}`;
+    rPhase.textContent = LABELS[p.name];
+    rIllum.textContent = pct + "%";
+    rAge.textContent = p.age.toFixed(1) + " d";
+    scrubDate.textContent = isToday
+      ? `Today — ${FULL.format(date)}`
+      : `${FULL.format(date)} · ${Math.round((date - TODAY) / 86400000)} days ahead`;
+  }
+
+  const TODAY = new Date();
+  clock.textContent = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(TODAY);
+
+  function fromScrubber() {
+    const days = parseFloat(scrubber.value);
+    const d = new Date(TODAY.getTime() + days * 86400000);
+    paint(d, days === 0);
+  }
+  scrubber.addEventListener("input", fromScrubber);
+  $("#scrub-reset").addEventListener("click", () => { scrubber.value = 0; fromScrubber(); });
+  paint(TODAY, true);
+
+  /* ── the phase strip ───────────────────────────────────────── */
+
+  const todayName = phaseFor(TODAY).name;
+  $("#strip").innerHTML = PHASES.map((p, i) => {
+    // illumination at the centre of this bucket, for today's lunation
+    const centreAge = i * (SYNODIC / 8);
+    const d = new Date(TODAY.getTime() + (centreAge - phaseFor(TODAY).age) * 86400000);
+    const pct = Math.round(illumination(d) * 100);
+    return `<div class="ph${p === todayName ? " now" : ""}">
+      <span class="disc"><img src="assets/phases/${p}.webp" alt="" loading="lazy" width="800" height="800"></span>
+      <b>${LABELS[p]}</b><span>${pct}%</span>
+    </div>`;
+  }).join("");
+
+  /* ── the accuracy chart ────────────────────────────────────── */
+
+  // Lifted verbatim from Tests/LunarTests/PhaseCalculatorTests.swift
+  const USNO = [[2024,1,25,100],[2024,3,1,71],[2024,4,8,0],[2024,6,15,62],[2024,7,4,3],
+    [2024,9,22,74],[2024,11,15,100],[2024,12,15,100],[2025,1,15,97],[2025,3,14,100],
+    [2025,4,21,46],[2025,6,11,100],[2025,9,7,100],[2025,12,4,99],[2026,1,10,52],
+    [2026,2,20,10],[2026,4,21,22],[2026,6,29,100],[2026,10,15,22],[2026,8,28,100]];
+  USNO.sort((a, b) => new Date(Date.UTC(a[0],a[1]-1,a[2])) - new Date(Date.UTC(b[0],b[1]-1,b[2])));
+
+  const TOL = 1.5;                       // percentage points, the test's tolerance
+  const rows = USNO.map(([y, m, d, pub]) => {
+    const date = new Date(Date.UTC(y, m - 1, d, 12));
+    const got = illumination(date) * 100;
+    return { date, y, m, d, pub, got, err: Math.abs(got - pub) };
+  });
+  const worst = Math.max(...rows.map(r => r.err));
+  const CEIL = 2.0;                      // chart ceiling, in points
+
+  $("#bars").innerHTML = rows.map(r => {
+    const h = Math.min(100, r.err / CEIL * 100);
+    const iso = `${r.y}-${String(r.m).padStart(2, "0")}-${String(r.d).padStart(2, "0")}`;
+    return `<button class="bar" type="button" tabindex="0">
+      <span class="tip">${iso} · USNO ${r.pub}% · Lunar ${r.got.toFixed(1)}% · Δ ${r.err.toFixed(2)}</span>
+      <i style="height:${h}%"></i>
+    </button>`;
+  }).join("");
+  $("#tol-line").style.top = (100 - TOL / CEIL * 100) + "%";
+  const MY = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
+  $("#ax-first").textContent = MY.format(rows[0].date);
+  $("#ax-last").textContent = MY.format(rows[rows.length - 1].date);
+  $("#worst").textContent = worst.toFixed(2) + " percentage points";
+  $("#tbody").innerHTML = rows.map(r => {
+    const iso = `${r.y}-${String(r.m).padStart(2, "0")}-${String(r.d).padStart(2, "0")}`;
+    return `<tr><td>${iso}</td><td>${r.pub}%</td><td>${r.got.toFixed(1)}%</td><td>${r.err.toFixed(2)}</td></tr>`;
+  }).join("");
+  $("#chart").setAttribute("aria-label",
+    `Bar chart of twenty absolute differences between Lunar and USNO illumination figures, all below the 1.5 point test tolerance. Largest is ${worst.toFixed(2)} points.`);
+
+  /* ── copy buttons ──────────────────────────────────────────── */
+
+  document.querySelectorAll(".copy").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const src = document.querySelector(btn.dataset.copy);
+      if (!src) return;
+      try {
+        await navigator.clipboard.writeText(src.innerText.trim());
+        const was = btn.textContent;
+        btn.textContent = "Copied"; btn.dataset.done = "1";
+        setTimeout(() => { btn.textContent = was; btn.dataset.done = "0"; }, 1600);
+      } catch { /* clipboard blocked; the text stays selectable */ }
+    });
+  });
+})();
+</script>
+</body>
+</html>
