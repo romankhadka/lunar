@@ -7,7 +7,7 @@ enum Log {
     static let image       = Logger(subsystem: "com.lunar", category: "image")
     static let ui          = Logger(subsystem: "com.lunar", category: "ui")
 
-    static var file: FileLog = {
+    static let file: FileLog = {
         let dir = FileManager.default.urls(for: .libraryDirectory,
                                             in: .userDomainMask)[0]
             .appendingPathComponent("Logs/Lunar", isDirectory: true)

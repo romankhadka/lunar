@@ -11,6 +11,7 @@ final class AppCoordinator: ObservableObject {
     private let setter: WallpaperApplying
     private let canvasSizeProvider: () -> CGSize
     private let defaults: UserDefaults
+    private let fileLog: FileLog
     private let clock: () -> Date
 
     @Published private(set) var currentPhase: MoonPhase?
@@ -24,12 +25,14 @@ final class AppCoordinator: ObservableObject {
          setter: WallpaperApplying,
          canvasSizeProvider: @escaping () -> CGSize,
          defaults: UserDefaults,
+         fileLog: FileLog,
          clock: @escaping () -> Date = { Date() }) {
         self.images = images
         self.compositor = compositor
         self.setter = setter
         self.canvasSizeProvider = canvasSizeProvider
         self.defaults = defaults
+        self.fileLog = fileLog
         self.clock = clock
     }
 
@@ -59,12 +62,12 @@ final class AppCoordinator: ObservableObject {
             publish(phase, at: now)
             lastError = nil
             Log.coordinator.log("Applied \(phase.phaseName.rawValue, privacy: .public) @ \(key, privacy: .public)")
-            Log.file.write("Applied \(phase.phaseName.rawValue) (\(Int(phase.illumination*100))%)")
+            fileLog.write("Applied \(phase.phaseName.rawValue) (\(Int(phase.illumination*100))%)")
             return true
         } catch {
             lastError = error.localizedDescription
             Log.coordinator.error("Update failed: \(error.localizedDescription, privacy: .public)")
-            Log.file.write("ERROR: \(error.localizedDescription)")
+            fileLog.write("ERROR: \(error.localizedDescription)")
             return false
         }
     }
