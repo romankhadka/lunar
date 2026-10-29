@@ -166,6 +166,41 @@ final class PhaseCalculatorTests: XCTestCase {
         XCTAssertEqual(p.date, d)
     }
 
+    func testPhaseMatchesStandaloneFunctions() {
+        // phase(for:) shares one ephemeris; it must agree with the
+        // single-purpose entry points exactly.
+        for day in stride(from: 0.0, to: 60.0, by: 0.37) {
+            let d = utcDate(2026, 1, 1).addingTimeInterval(day * 86400)
+            let p = PhaseCalculator.phase(for: d)
+            XCTAssertEqual(p.age, PhaseCalculator.synodicAge(for: d))
+            XCTAssertEqual(p.illumination, PhaseCalculator.illumination(for: d))
+            XCTAssertEqual(p.phaseName, PhaseCalculator.phaseName(for: d))
+        }
+    }
+
+    func testNextPhaseChangeIsPreciseToOneMinute() throws {
+        var d = utcDate(2026, 1, 1)
+        // Walk through two full cycles of transitions.
+        for _ in 0..<16 {
+            let current = PhaseCalculator.phaseName(for: d)
+            let next = try XCTUnwrap(PhaseCalculator.nextPhaseChange(after: d))
+            XCTAssertNotEqual(next.name, current)
+            XCTAssertEqual(PhaseCalculator.phaseName(for: next.date), next.name)
+            XCTAssertEqual(PhaseCalculator.phaseName(for: next.date.addingTimeInterval(-60)),
+                           current, "Change found more than 1 minute late")
+            d = next.date
+        }
+    }
+
+    func testNextPhaseChangeFollowsCycleOrder() throws {
+        let order = PhaseName.allCases
+        let d = utcDate(2026, 3, 3)
+        let current = PhaseCalculator.phaseName(for: d)
+        let next = try XCTUnwrap(PhaseCalculator.nextPhaseChange(after: d))
+        let i = try XCTUnwrap(order.firstIndex(of: current))
+        XCTAssertEqual(next.name, order[(i + 1) % order.count])
+    }
+
     func testAgeIsInValidRange() {
         let p = PhaseCalculator.phase(for: Date())
         XCTAssertGreaterThanOrEqual(p.age, 0)

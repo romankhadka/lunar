@@ -63,7 +63,7 @@ Images should be square, RGB, with the moon centered on a near-black background.
 
 Lunar computes the current moon phase locally using Jean Meeus's *Astronomical Algorithms* (chs. 25, 47, 48) — full lunar and solar ephemeris with all 60+60 periodic terms, accurate to within 0.1% illumination against USNO reference data. The phase is bucketed into one of 8 named phases. The matching base image is composited with a thin overlay (`Waxing Gibbous · 87% · Apr 23`) in the bottom-right corner, scaled to the largest connected display, and applied to every screen via `NSWorkspace.setDesktopImageURL`.
 
-macOS only lets that API touch the Space (Desktop) that is active on each screen at the moment of the call. To keep the other Spaces in sync, Lunar observes `activeSpaceDidChangeNotification` and silently re-applies today's wallpaper whenever you switch Desktops — each stale Desktop self-heals the first time you visit it.
+macOS only lets that API touch the Space (Desktop) that is active on each screen at the moment of the call. To keep the other Spaces in sync, Lunar observes `activeSpaceDidChangeNotification` and silently re-applies today's wallpaper whenever you switch Desktops — each stale Desktop self-heals the first time you visit it. Screens that already show today's image are skipped.
 
 ## Logs
 
@@ -72,7 +72,7 @@ macOS only lets that API touch the Space (Desktop) that is active on each screen
 ## Development
 
 ```bash
-swift test         # 40 unit tests, ~0.1s
+swift test         # 52 unit tests, ~0.2s
 swift build        # debug build
 ./scripts/build.sh # assemble Lunar.app
 ```
@@ -82,13 +82,14 @@ Module layout (in `Sources/Lunar/`):
 | File | Responsibility |
 |---|---|
 | `PhaseName.swift` | 8-case enum; raw values double as filename stems |
-| `PhaseCalculator.swift` | Julian Day → synodic age → illumination → phase name |
+| `PhaseCalculator.swift` | Julian Day → synodic age → illumination → phase name; next phase change |
 | `ImageProvider.swift` | Override-folder > bundle resolution |
 | `Compositor.swift` | Core Graphics composite + Core Text overlay |
 | `WallpaperSetter.swift` | Dated-filename file store + NSWorkspace apply |
 | `Logging.swift` | `os.Logger` categories + rolling file log |
 | `AppCoordinator.swift` | Orchestrates all of the above with idempotency |
 | `MenuBarController.swift` | SwiftUI `MenuBarExtra` view |
+| `LaunchAtLogin.swift` | Observable `SMAppService` login-item state |
 | `App.swift` | `@main`, AppDelegate, schedule and event subscriptions |
 
 ## Credits

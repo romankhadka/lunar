@@ -14,47 +14,28 @@ enum PhaseCalculator {
 
     // MARK: - Public API
 
-    /// Converts a `Date` to a Julian Day number.
-    /// Uses Meeus AA (2nd ed.), p. 61, formula 7.1.
-    static func julianDay(for date: Date) -> Double {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
-        let c = cal.dateComponents([.year, .month, .day,
-                                    .hour, .minute, .second],
-                                   from: date)
-        var Y = Double(c.year!)
-        var M = Double(c.month!)
-        let D = Double(c.day!)
-              + Double(c.hour!) / 24.0
-              + Double(c.minute!) / 1440.0
-              + Double(c.second!) / 86400.0
+    /// Julian Day of the Unix epoch, 1970-01-01 00:00 UTC.
+    private static let unixEpochJulianDay: Double = 2440587.5
 
-        if M <= 2 { Y -= 1; M += 12 }
-        let A = floor(Y / 100)
-        let B = 2 - A + floor(A / 4)
-        return floor(365.25 * (Y + 4716))
-             + floor(30.6001 * (M + 1))
-             + D + B - 1524.5
+    /// Converts a `Date` to a Julian Day number (UTC, proleptic Gregorian).
+    /// Same result as Meeus AA (2nd ed.) formula 7.1, without the calendar
+    /// round-trip.
+    static func julianDay(for date: Date) -> Double {
+        date.timeIntervalSince1970 / 86400.0 + unixEpochJulianDay
     }
 
     /// Days since the last true new moon (new-moon elongation = 0), in [0, 29.53).
     /// Derived from the Moon's true geocentric elongation from the Sun, so the
     /// result tracks the actual lunation rather than the mean cycle.
     static func synodicAge(for date: Date) -> Double {
-        let elong = trueElongationDegrees(for: date)
-        // Elongation = 0° at new, 180° at full, approaches 360°≡0° back at next new.
-        // Age fraction of synodic cycle = elong / 360°.
-        let fraction = elong / 360.0
-        return fraction * synodicPeriod
+        synodicAge(Ephemeris(jd: julianDay(for: date)))
     }
 
     /// Fraction of the Moon's disk illuminated, in [0, 1].
     /// Meeus Astronomical Algorithms (2nd ed.), chapters 25, 47, 48.
     /// Accurate to better than 0.1% against USNO / NASA sources.
     static func illumination(for date: Date) -> Double {
-        let i = phaseAngleDegrees(for: date)  // 0°=full, 180°=new
-        let iRad = i * .pi / 180.0
-        return (1.0 + cos(iRad)) / 2.0
+        illumination(Ephemeris(jd: julianDay(for: date)))
     }
 
     /// Buckets a synodic-age value into one of 8 phase names.
@@ -80,36 +61,91 @@ enum PhaseCalculator {
         }
     }
 
-    /// Full phase information for a given instant.
+    /// Full phase information for a given instant. Computes the Sun and Moon
+    /// positions once and derives both age and illumination from them.
     static func phase(for date: Date) -> MoonPhase {
-        let age = synodicAge(for: date)
+        let eph = Ephemeris(jd: julianDay(for: date))
+        let age = synodicAge(eph)
         return MoonPhase(
             date: date,
             age: age,
-            illumination: illumination(for: date),
+            illumination: illumination(eph),
             phaseName: phaseName(forAge: age)
         )
     }
 
+    /// Phase name only, for callers that do not need illumination.
+    static func phaseName(for date: Date) -> PhaseName {
+        phaseName(forAge: synodicAge(for: date))
+    }
+
+    /// Next instant after `date` at which the phase name changes, to within
+    /// one minute. Looks ahead at most 10 days; a bucket is ~3.7 days wide.
+    static func nextPhaseChange(after date: Date) -> (name: PhaseName, date: Date)? {
+        let current = phaseName(for: date)
+        let step: TimeInterval = 6 * 3600     // far shorter than one bucket
+        var before = date
+        for i in 1...40 {
+            let probe = date.addingTimeInterval(Double(i) * step)
+            let name = phaseName(for: probe)
+            guard name != current else { before = probe; continue }
+            // Exactly one change lies in (before, probe]. Bisect it.
+            var lo = before, hi = probe
+            while hi.timeIntervalSince(lo) > 60 {
+                let mid = lo.addingTimeInterval(hi.timeIntervalSince(lo) / 2)
+                if phaseName(for: mid) == current { lo = mid } else { hi = mid }
+            }
+            return (name, hi)
+        }
+        return nil
+    }
+
     // MARK: - Internal astronomy (Meeus)
+
+    /// Sun and Moon positions for one instant.
+    private struct Ephemeris {
+        let sunLongitude: Double    // λ☉, degrees
+        let sunDistanceAU: Double   // R
+        let moonLongitude: Double   // λ☽, degrees
+        let moonLatitude: Double    // β, degrees
+        let moonDistanceKm: Double  // Δ
+
+        init(jd: Double) {
+            let sun = PhaseCalculator.solarPosition(jd: jd)
+            let moon = PhaseCalculator.moonPosition(jd: jd)
+            sunLongitude = sun.longitude
+            sunDistanceAU = sun.distanceAU
+            moonLongitude = moon.longitude
+            moonLatitude = moon.latitude
+            moonDistanceKm = moon.distanceKm
+        }
+    }
+
+    private static func synodicAge(_ eph: Ephemeris) -> Double {
+        // Elongation = 0° at new, 180° at full, approaches 360°≡0° back at next new.
+        // Age fraction of synodic cycle = elong / 360°.
+        trueElongationDegrees(eph) / 360.0 * synodicPeriod
+    }
+
+    private static func illumination(_ eph: Ephemeris) -> Double {
+        let i = phaseAngleDegrees(eph)  // 0°=full, 180°=new
+        let iRad = i * .pi / 180.0
+        return (1.0 + cos(iRad)) / 2.0
+    }
 
     /// Elongation of Moon from Sun in ecliptic longitude, 0°–360°
     /// (0° at new, 180° at full). Uses geocentric longitudes from chs. 25/47.
-    private static func trueElongationDegrees(for date: Date) -> Double {
-        let jd = julianDay(for: date)
-        let sun = solarLongitudeDegrees(jd: jd)
-        let moon = moonLongitudeDegrees(jd: jd)
-        var d = (moon - sun).truncatingRemainder(dividingBy: 360.0)
+    private static func trueElongationDegrees(_ eph: Ephemeris) -> Double {
+        var d = (eph.moonLongitude - eph.sunLongitude).truncatingRemainder(dividingBy: 360.0)
         if d < 0 { d += 360.0 }
         return d
     }
 
     /// Sun–Earth–Moon phase angle `i` in degrees (Meeus eq. 48.3).
     /// 0°=full, 90°=quarter, 180°=new.
-    private static func phaseAngleDegrees(for date: Date) -> Double {
-        let jd = julianDay(for: date)
-        let (sunLon, sunR) = solarPosition(jd: jd)                         // λ☉ (deg), R (AU)
-        let (moonLon, moonLat, moonDelta) = moonPosition(jd: jd)           // λ☽, β, Δ
+    private static func phaseAngleDegrees(_ eph: Ephemeris) -> Double {
+        let (sunLon, sunR) = (eph.sunLongitude, eph.sunDistanceAU)
+        let (moonLon, moonLat, moonDelta) = (eph.moonLongitude, eph.moonLatitude, eph.moonDistanceKm)
         // Geocentric elongation ψ from ecliptic coords (Meeus eq. 48.4):
         //   cos ψ = cos(β) · cos(λ☽ − λ☉)
         let dLon = (moonLon - sunLon) * .pi / 180.0
@@ -145,10 +181,6 @@ enum PhaseCalculator {
         let trueAnomRad = trueAnom * .pi / 180.0
         let R = (1.000001018 * (1 - e * e)) / (1 + e * cos(trueAnomRad))
         return (normalizeDegrees(lambda), R)
-    }
-
-    private static func solarLongitudeDegrees(jd: Double) -> Double {
-        solarPosition(jd: jd).longitude
     }
 
     // MARK: - Lunar position (Meeus ch. 47, tables 47.A/47.B)
@@ -368,10 +400,6 @@ enum PhaseCalculator {
         let latitude  = sigmaB / 1_000_000.0
         let distanceKm = 385000.56 + sigmaR / 1000.0
         return (longitude, latitude, distanceKm)
-    }
-
-    private static func moonLongitudeDegrees(jd: Double) -> Double {
-        moonPosition(jd: jd).longitude
     }
 
     private static func normalizeDegrees(_ x: Double) -> Double {
