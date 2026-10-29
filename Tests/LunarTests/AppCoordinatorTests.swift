@@ -26,13 +26,13 @@ final class AppCoordinatorTests: XCTestCase {
 
     final class FakeSetter: WallpaperApplying {
         var applied: [Date] = []
-        var reapplied = 0
+        var reapplied: [Bool] = []   // onlyStale flag of each call
         var todayFileExists = false   // default: no file yet
         func apply(image: CGImage, for date: Date) throws {
             applied.append(date)
             todayFileExists = true   // apply "creates" the file
         }
-        func reapplyToday() throws { reapplied += 1 }
+        func reapplyToday(onlyStale: Bool) throws { reapplied.append(onlyStale) }
         func fileExists(for date: Date) -> Bool { todayFileExists }
     }
 
@@ -41,50 +41,51 @@ final class AppCoordinatorTests: XCTestCase {
         images: FakeImages = FakeImages(),
         compositor: FakeCompositor = FakeCompositor(),
         setter: FakeSetter = FakeSetter(),
-        defaults: UserDefaults? = nil
+        defaults: UserDefaults? = nil,
+        canvas: @escaping () -> CGSize = { CGSize(width: 1920, height: 1080) }
     ) -> AppCoordinator {
         let defaults = defaults ?? UserDefaults(suiteName: "test-\(UUID().uuidString)")!
         return AppCoordinator(
             images: images, compositor: compositor, setter: setter,
-            canvasSizeProvider: { CGSize(width: 1920, height: 1080) },
+            canvasSizeProvider: canvas,
             defaults: defaults,
             clock: { Date(timeIntervalSince1970: 1_745_000_000) }
         )
     }
 
     @MainActor
-    func testFirstCallTriggersFullPipeline() throws {
+    func testFirstCallTriggersFullPipeline() {
         let images = FakeImages()
         let comp = FakeCompositor()
         let setter = FakeSetter()
         let c = makeCoordinator(images: images, compositor: comp, setter: setter)
-        try c.updateWallpaper()
+        c.updateWallpaper()
         XCTAssertEqual(images.calls, 1)
         XCTAssertEqual(comp.calls, 1)
         XCTAssertEqual(setter.applied.count, 1)
     }
 
     @MainActor
-    func testIdempotentSecondCallSkips() throws {
+    func testIdempotentSecondCallSkips() {
         let images = FakeImages()
         let comp = FakeCompositor()
         let setter = FakeSetter()
         let c = makeCoordinator(images: images, compositor: comp, setter: setter)
-        try c.updateWallpaper()
-        try c.updateWallpaper()
+        c.updateWallpaper()
+        c.updateWallpaper()
         XCTAssertEqual(images.calls, 1, "ImageProvider should not be hit twice")
         XCTAssertEqual(comp.calls, 1)
         XCTAssertEqual(setter.applied.count, 1)
     }
 
     @MainActor
-    func testForceBypassesIdempotency() throws {
+    func testForceBypassesIdempotency() {
         let images = FakeImages()
         let comp = FakeCompositor()
         let setter = FakeSetter()
         let c = makeCoordinator(images: images, compositor: comp, setter: setter)
-        try c.updateWallpaper()
-        try c.updateWallpaper(force: true)
+        c.updateWallpaper()
+        c.updateWallpaper(force: true)
         XCTAssertEqual(images.calls, 2)
         XCTAssertEqual(setter.applied.count, 2)
     }
@@ -102,15 +103,63 @@ final class AppCoordinatorTests: XCTestCase {
             canvasSizeProvider: { CGSize(width: 100, height: 100) },
             defaults: UserDefaults(suiteName: "t-\(UUID().uuidString)")!,
             clock: { Date() })
-        XCTAssertNoThrow(try c.updateWallpaper())
+        XCTAssertFalse(c.updateWallpaper())
         XCTAssertEqual(setter.applied.count, 0)
     }
 
     @MainActor
-    func testReapplyForwardsToSetter() throws {
+    func testReapplyForwardsToSetter() {
         let setter = FakeSetter()
         let c = makeCoordinator(setter: setter)
-        try c.reapplyToday()
-        XCTAssertEqual(setter.reapplied, 1)
+        c.reapplyToday()
+        c.reapplyToday(onlyStale: true)
+        XCTAssertEqual(setter.reapplied, [false, true])
+    }
+
+    @MainActor
+    func testUpdateReportsWhetherItApplied() {
+        let c = makeCoordinator()
+        XCTAssertTrue(c.updateWallpaper())
+        XCTAssertFalse(c.updateWallpaper())
+        XCTAssertTrue(c.updateWallpaper(force: true))
+    }
+
+    @MainActor
+    func testScreenChangeWithSameCanvasReappliesWithoutRendering() {
+        let images = FakeImages()
+        let comp = FakeCompositor()
+        let setter = FakeSetter()
+        let c = makeCoordinator(images: images, compositor: comp, setter: setter)
+        c.updateWallpaper()
+        c.handleScreenChange()
+        c.handleScreenChange()
+        XCTAssertEqual(comp.calls, 1, "Same canvas must not render again")
+        XCTAssertEqual(setter.applied.count, 1)
+        XCTAssertEqual(setter.reapplied, [false, false],
+                       "Existing file is pushed to every screen")
+    }
+
+    @MainActor
+    func testScreenChangeWithNewCanvasRendersAgain() {
+        var size = CGSize(width: 1920, height: 1080)
+        let comp = FakeCompositor()
+        let setter = FakeSetter()
+        let c = makeCoordinator(compositor: comp, setter: setter, canvas: { size })
+        c.updateWallpaper()
+        size = CGSize(width: 5120, height: 2880)
+        c.handleScreenChange()
+        XCTAssertEqual(comp.calls, 2)
+        XCTAssertEqual(setter.applied.count, 2)
+        XCTAssertTrue(setter.reapplied.isEmpty, "A fresh apply already covers every screen")
+    }
+
+    @MainActor
+    func testPublishesCurrentAndNextPhase() throws {
+        let c = makeCoordinator()
+        c.updateWallpaper()
+        let current = try XCTUnwrap(c.currentPhase)
+        let next = try XCTUnwrap(c.nextPhase)
+        XCTAssertNotEqual(next.name, current.phaseName)
+        XCTAssertGreaterThan(next.date, current.date)
     }
 }

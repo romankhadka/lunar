@@ -51,6 +51,12 @@ final class WallpaperSetterFileTests: XCTestCase {
         XCTAssertFalse(remaining.contains("2026-01-03.png"))
     }
 
+    func testDayStampUsesLocalCalendarDay() {
+        let d = DateComponents(calendar: .init(identifier: .gregorian),
+                               year: 2026, month: 1, day: 5, hour: 23, minute: 59).date!
+        XCTAssertEqual(WallpaperFileStore.dayStamp(for: d), "2026-01-05")
+    }
+
     func testURLForDateRoundTrips() {
         let store = WallpaperFileStore(directory: tempDir)
         let d = DateComponents(calendar: .init(identifier: .gregorian),

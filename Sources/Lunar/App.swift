@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import ServiceManagement
 
 @main
 struct LunarApp: App {
@@ -10,10 +9,9 @@ struct LunarApp: App {
         MenuBarExtra {
             MenuBarContent(
                 coordinator: appDelegate.coordinator,
+                launchAtLogin: appDelegate.launchAtLogin,
                 openPhasesFolder: appDelegate.openPhasesFolder,
-                openLog: appDelegate.openLog,
-                toggleLaunchAtLogin: appDelegate.toggleLaunchAtLogin,
-                isLaunchAtLoginEnabled: appDelegate.isLaunchAtLoginEnabled)
+                openLog: appDelegate.openLog)
         } label: {
             Image(systemName: "moon.fill")
         }
@@ -24,6 +22,7 @@ struct LunarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let coordinator: AppCoordinator
     let imageProvider: ImageProvider
+    let launchAtLogin = LaunchAtLogin()
 
     private var observers: [NSObjectProtocol] = []
     private var dailyTimer: Timer?
@@ -58,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         try? imageProvider.ensureOverrideDirectoryExists()
-        try? coordinator.updateWallpaper()
+        coordinator.updateWallpaper()
         installObservers()
         scheduleDailyTimer()
     }
@@ -69,7 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main) { [weak self] _ in
                 guard let self else { return }
-                Task { @MainActor in try? self.coordinator.updateWallpaper() }
+                Task { @MainActor in
+                    self.coordinator.updateWallpaper()
+                    // The timer's fire date can drift across sleep; re-anchor it.
+                    self.scheduleDailyTimer()
+                }
             })
 
         let anc = NotificationCenter.default
@@ -77,74 +80,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main) { [weak self] _ in
                 guard let self else { return }
-                Task { @MainActor in try? self.coordinator.updateWallpaper(force: true) }
+                Task { @MainActor in self.coordinator.handleScreenChange() }
             })
 
         // setDesktopImageURL only writes the Space that is active on each
         // screen at the moment of the call, so other Spaces keep whatever the
         // system had stored for them. Re-pushing today's PNG whenever the
         // active Space changes lets stale Spaces self-heal on first visit.
+        // Screens whose Space already shows the file are skipped.
         observers.append(nc.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil, queue: .main) { [weak self] _ in
                 guard let self else { return }
-                Task { @MainActor in try? self.coordinator.reapplyToday() }
+                Task { @MainActor in self.coordinator.reapplyToday(onlyStale: true) }
             })
 
+        // This re-push stays unconditional. It keeps the light and dark
+        // wallpaper slots in sync, and a URL match on one slot proves nothing
+        // about the other.
         appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.new]) {
             [weak self] _, _ in
             guard let self else { return }
-            Task { @MainActor in try? self.coordinator.reapplyToday() }
+            Task { @MainActor in self.coordinator.reapplyToday() }
         }
     }
 
     private func scheduleDailyTimer() {
-        let cal = Calendar.current
-        let now = Date()
-        var comps = cal.dateComponents([.year, .month, .day], from: now)
-        comps.hour = 6; comps.minute = 0; comps.second = 0
-        var fire = cal.date(from: comps)!
-        if fire <= now { fire = cal.date(byAdding: .day, value: 1, to: fire)! }
         dailyTimer?.invalidate()
-        dailyTimer = Timer(fire: fire, interval: 0, repeats: false) { [weak self] _ in
+        guard let fire = Calendar.current.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 6, minute: 0, second: 0),
+            matchingPolicy: .nextTime) else { return }
+        let timer = Timer(fire: fire, interval: 0, repeats: false) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
-                try? self.coordinator.updateWallpaper()
+                self.coordinator.updateWallpaper()
                 self.scheduleDailyTimer()
             }
         }
-        RunLoop.main.add(dailyTimer!, forMode: .common)
+        // A few minutes of slack lets macOS batch this wake-up with others.
+        timer.tolerance = 600
+        RunLoop.main.add(timer, forMode: .common)
+        dailyTimer = timer
     }
 
     static func largestCanvasSize() -> CGSize {
-        guard let s = NSScreen.screens.max(by: {
-            $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height
-        }) else { return CGSize(width: 5120, height: 2880) }
-        let scale = s.backingScaleFactor
-        return CGSize(width: s.frame.width * scale,
-                      height: s.frame.height * scale)
+        canvasSize(forScreenPixelSizes: NSScreen.screens.map { s in
+            CGSize(width: s.frame.width * s.backingScaleFactor,
+                   height: s.frame.height * s.backingScaleFactor)
+        })
+    }
+
+    /// Picks the screen with the most pixels, so no screen gets an upscaled
+    /// image. Compares pixels, not points: a 1x 2560×1440 display has fewer
+    /// pixels than a 2x 1512×982 laptop panel.
+    static func canvasSize(forScreenPixelSizes sizes: [CGSize]) -> CGSize {
+        sizes.max { $0.width * $0.height < $1.width * $1.height }
+            ?? CGSize(width: 5120, height: 2880)
     }
 
     func openPhasesFolder() { imageProvider.openOverrideFolderInFinder() }
 
     func openLog() {
         NSWorkspace.shared.open(Log.file.currentURL)
-    }
-
-    var isLaunchAtLoginEnabled: Bool {
-        SMAppService.mainApp.status == .enabled
-    }
-
-    func toggleLaunchAtLogin() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            Log.ui.error("Launch-at-login toggle failed: \(error.localizedDescription, privacy: .public)")
-        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

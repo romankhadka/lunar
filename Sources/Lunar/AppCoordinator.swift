@@ -33,65 +33,66 @@ final class AppCoordinator: ObservableObject {
         self.clock = clock
     }
 
-    func updateWallpaper(force: Bool = false) throws {
+    /// Renders and applies today's wallpaper unless the same day, phase and
+    /// canvas size were already applied. Returns `true` when it applied a
+    /// new image.
+    @discardableResult
+    func updateWallpaper(force: Bool = false) -> Bool {
         let now = clock()
         let phase = PhaseCalculator.phase(for: now)
-        let key = Self.key(for: now, phase: phase.phaseName)
+        let canvas = canvasSizeProvider()
+        let key = Self.key(for: now, phase: phase.phaseName, canvas: canvas)
 
         if !force,
            defaults.string(forKey: lastAppliedKeyDefault) == key,
            setter.fileExists(for: now) {
-            currentPhase = phase
-            nextPhase = Self.predictNext(from: now, currentAge: phase.age)
-            return
+            publish(phase, at: now)
+            return false
         }
 
         do {
             let base = try images.baseImage(for: phase.phaseName)
-            let canvas = canvasSizeProvider()
             let composed = compositor.composite(
                 base: base, phase: phase, canvasSize: canvas)
             try setter.apply(image: composed, for: now)
             defaults.set(key, forKey: lastAppliedKeyDefault)
-            currentPhase = phase
-            nextPhase = Self.predictNext(from: now, currentAge: phase.age)
+            publish(phase, at: now)
             lastError = nil
             Log.coordinator.log("Applied \(phase.phaseName.rawValue, privacy: .public) @ \(key, privacy: .public)")
             Log.file.write("Applied \(phase.phaseName.rawValue) (\(Int(phase.illumination*100))%)")
+            return true
         } catch {
             lastError = error.localizedDescription
             Log.coordinator.error("Update failed: \(error.localizedDescription, privacy: .public)")
             Log.file.write("ERROR: \(error.localizedDescription)")
+            return false
         }
     }
 
-    func reapplyToday() throws {
-        do { try setter.reapplyToday() }
+    /// The display layout changed. Screen-change notifications arrive in
+    /// bursts, so render again only when the canvas size changed. Otherwise
+    /// push the existing file, which also covers a newly attached screen.
+    func handleScreenChange() {
+        if !updateWallpaper() {
+            reapplyToday()
+        }
+    }
+
+    func reapplyToday(onlyStale: Bool = false) {
+        do { try setter.reapplyToday(onlyStale: onlyStale) }
         catch {
             lastError = error.localizedDescription
             Log.coordinator.error("reapply failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    private static func key(for date: Date, phase: PhaseName) -> String {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return "\(f.string(from: date))|\(phase.rawValue)"
+    private func publish(_ phase: MoonPhase, at now: Date) {
+        currentPhase = phase
+        nextPhase = PhaseCalculator.nextPhaseChange(after: now)
     }
 
-    private static func predictNext(from now: Date,
-                                     currentAge: Double) -> (name: PhaseName, date: Date) {
-        let currentName = PhaseCalculator.phaseName(forAge: currentAge)
-        var probe = now
-        let cal = Calendar.current
-        for hours in stride(from: 6, through: 240, by: 6) {
-            if let p = cal.date(byAdding: .hour, value: hours, to: now) {
-                let name = PhaseCalculator.phase(for: p).phaseName
-                if name != currentName { probe = p; return (name, probe) }
-            }
-        }
-        return (currentName, now)
+    private static func key(for date: Date, phase: PhaseName, canvas: CGSize) -> String {
+        let day = WallpaperFileStore.dayStamp(for: date)
+        return "\(day)|\(phase.rawValue)|\(Int(canvas.width))x\(Int(canvas.height))"
     }
 }

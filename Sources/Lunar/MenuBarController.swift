@@ -3,10 +3,9 @@ import AppKit
 
 struct MenuBarContent: View {
     @ObservedObject var coordinator: AppCoordinator
+    @ObservedObject var launchAtLogin: LaunchAtLogin
     let openPhasesFolder: () -> Void
     let openLog: () -> Void
-    let toggleLaunchAtLogin: () -> Void
-    let isLaunchAtLoginEnabled: Bool
 
     var body: some View {
         if let p = coordinator.currentPhase {
@@ -24,13 +23,13 @@ struct MenuBarContent: View {
             Text("Error: \(err)").foregroundColor(.red)
         }
         Divider()
-        Button("Refresh This Desktop") { try? coordinator.updateWallpaper(force: true) }
+        Button("Refresh This Desktop") { coordinator.updateWallpaper(force: true) }
         Button("Open Phases Folder…", action: openPhasesFolder)
         Button("Open Log", action: openLog)
         Divider()
         Toggle("Launch at Login",
-               isOn: Binding(get: { isLaunchAtLoginEnabled },
-                              set: { _ in toggleLaunchAtLogin() }))
+               isOn: Binding(get: { launchAtLogin.isEnabled },
+                              set: { _ in launchAtLogin.toggle() }))
         Divider()
         Button("Quit Lunar") { NSApplication.shared.terminate(nil) }
             .keyboardShortcut("q")
