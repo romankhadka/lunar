@@ -4,6 +4,24 @@ import CoreGraphics
 
 final class AppCoordinatorTests: XCTestCase {
 
+    /// Per-test log folder, so tests never write to ~/Library/Logs/Lunar.
+    private var logDir: URL!
+
+    override func setUpWithError() throws {
+        logDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lunar-coord-log-\(UUID().uuidString)",
+                                    isDirectory: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: logDir)
+    }
+
+    private func logContents() -> String {
+        (try? String(contentsOf: logDir.appendingPathComponent("lunar.log"),
+                     encoding: .utf8)) ?? ""
+    }
+
     final class FakeImages: ImageProviding {
         var calls = 0
         func baseImage(for phase: PhaseName) throws -> CGImage {
@@ -49,6 +67,7 @@ final class AppCoordinatorTests: XCTestCase {
             images: images, compositor: compositor, setter: setter,
             canvasSizeProvider: canvas,
             defaults: defaults,
+            fileLog: FileLog(directory: logDir),
             clock: { Date(timeIntervalSince1970: 1_745_000_000) }
         )
     }
@@ -63,6 +82,7 @@ final class AppCoordinatorTests: XCTestCase {
         XCTAssertEqual(images.calls, 1)
         XCTAssertEqual(comp.calls, 1)
         XCTAssertEqual(setter.applied.count, 1)
+        XCTAssertTrue(logContents().contains("Applied"), "Success goes to the injected log")
     }
 
     @MainActor
@@ -102,9 +122,11 @@ final class AppCoordinatorTests: XCTestCase {
             images: Throwing(), compositor: FakeCompositor(), setter: setter,
             canvasSizeProvider: { CGSize(width: 100, height: 100) },
             defaults: UserDefaults(suiteName: "t-\(UUID().uuidString)")!,
+            fileLog: FileLog(directory: logDir),
             clock: { Date() })
         XCTAssertFalse(c.updateWallpaper())
         XCTAssertEqual(setter.applied.count, 0)
+        XCTAssertTrue(logContents().contains("ERROR:"), "Error goes to the injected log")
     }
 
     @MainActor

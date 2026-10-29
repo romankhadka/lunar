@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             setter: setter,
             canvasSizeProvider: AppDelegate.largestCanvasSize,
             defaults: .standard,
+            fileLog: Log.file,
             clock: { Date() })
 
         super.init()
